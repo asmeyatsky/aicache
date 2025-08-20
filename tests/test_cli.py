@@ -45,6 +45,17 @@ class TestCLI(unittest.TestCase):
         result = subprocess.run(self.cli_path + ["clear", "--interactive"], input="1\n", capture_output=True, text=True, env=self.env)
         self.assertIn("Selected cache entries deleted.", result.stdout)
 
+    def test_cli_prune(self):
+        # This is tricky to test without a config file.
+        # We will just check if the command runs without error.
+        result = subprocess.run(self.cli_path + ["prune"], capture_output=True, text=True, env=self.env)
+        self.assertIn("Pruned 0 expired cache entries.", result.stdout)
+
+    def test_cli_stats(self):
+        subprocess.run(self.cli_path + ["set", "prompt_stats_cli", "response_stats_cli"], env=self.env)
+        result = subprocess.run(self.cli_path + ["stats"], capture_output=True, text=True, env=self.env)
+        self.assertIn("Total entries: 1", result.stdout)
+
 if __name__ == '__main__':
     # We need to add the src directory to the python path to run the tests
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))

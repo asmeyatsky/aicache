@@ -74,5 +74,36 @@ class TestCache(unittest.TestCase):
         self.assertIsNone(self.cache.get(prompt))
         self.assertFalse(self.cache.delete("non_existent_key"))
 
+    def test_config(self):
+        # Test that the default config is loaded
+        self.assertEqual(self.cache.config["ttl"], 0)
+
+    def test_ttl(self):
+        # Test TTL functionality
+        self.cache.config["ttl"] = 1  # 1 second
+        self.cache.set("prompt_ttl", "response_ttl")
+        import time
+        time.sleep(1.1)
+        self.assertIsNone(self.cache.get("prompt_ttl"))
+
+    def test_prune(self):
+        self.cache.config["ttl"] = 1  # 1 second
+        self.cache.set("prompt_prune", "response_prune")
+        import time
+        time.sleep(1.1)
+        self.assertEqual(self.cache.prune(), 1)
+
+    def test_cache_size_limit(self):
+        self.cache.config["cache_size_limit"] = 100  # 100 bytes
+        self.cache.set("prompt_size_1", "response_size_1_long_long_long")
+        self.cache.set("prompt_size_2", "response_size_2_long_long_long")
+        self.assertLessEqual(self.cache.get_cache_size(), 100)
+
+    def test_stats(self):
+        self.cache.set("prompt_stats", "response_stats")
+        stats = self.cache.stats()
+        self.assertEqual(stats["num_entries"], 1)
+        self.assertGreater(stats["total_size"], 0)
+
 if __name__ == '__main__':
     unittest.main()

@@ -2,11 +2,11 @@
 
 AI CLI Session Caching.
 
-This project is a caching system for AI CLIs (Gemini and Claude) to improve developer workflow efficiency.
+This project is a caching system for AI CLIs (Gemini, Claude, and OpenAI) to improve developer workflow efficiency.
 
 ## Features
 
-- Automatic session caching for `gcloud` and `llm` CLIs.
+- Automatic session caching for `gcloud`, `llm`, and `openai` CLIs.
 - Intelligent argument parsing to create accurate cache keys.
 - Persistence of cache across sessions.
 - A rich set of commands to manage the cache (`list`, `inspect`, `clear`).
@@ -38,7 +38,7 @@ This project is a caching system for AI CLIs (Gemini and Claude) to improve deve
 
 ### Usage
 
-Once installed, the `aicache` wrappers for `gcloud` and `llm` will work automatically. When you run a command with `gcloud` or `llm`, the wrapper will cache the response. The next time you run the same command, the response will be served from the cache.
+Once installed, the `aicache` wrappers for `gcloud`, `llm`, and `openai` will work automatically. When you run a command with `gcloud`, `llm`, or `openai`, the wrapper will cache the response. The next time you run the same command, the response will be served from the cache.
 
 ### CLI Commands
 

@@ -10,4 +10,7 @@ setup(
             "aicache = aicache.cli:main",
         ],
     },
+    install_requires=[
+        "PyYAML",
+    ],
 )

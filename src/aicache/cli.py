@@ -32,6 +32,9 @@ def main():
     # Generate completions command
     completions_parser = subparsers.add_parser("generate-completions")
 
+    # Prune command
+    prune_parser = subparsers.add_parser("prune")
+
     args = parser.parse_args()
     cache = Cache()
 
@@ -98,7 +101,7 @@ _aicache_completions()
 
     case "${prev_word}" in
         aicache)
-            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions" -- ${cur_word}) )
+            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune" -- ${cur_word}) )
             ;;
         list)
             COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur_word}) )
@@ -115,6 +118,16 @@ _aicache_completions()
 complete -F _aicache_completions aicache
 """
         print(completion_script)
+    elif args.command == "prune":
+        pruned_count = cache.prune()
+        print(f"Pruned {pruned_count} expired cache entries.")
+    elif args.command == "stats":
+        stats = cache.stats()
+        print("Cache Statistics:")
+        print(f"  Total entries: {stats['num_entries']}")
+        print(f"  Total size: {stats['total_size']} bytes")
+        if stats['num_expired'] > 0:
+            print(f"  Expired entries: {stats['num_expired']}")
     else:
         parser.print_help()
 
