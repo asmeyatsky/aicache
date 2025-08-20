@@ -1,98 +1,141 @@
 import argparse
 import json
+import sys
+import os
 from .core import Cache
+from .plugins import REGISTERED_PLUGINS
 
 def main():
-    parser = argparse.ArgumentParser(description="AI Cache CLI")
-    subparsers = parser.add_subparsers(dest="command")
+    invoked_as = os.path.basename(sys.argv[0])
 
-    # Get command
-    get_parser = subparsers.add_parser("get")
-    get_parser.add_argument("prompt")
-    get_parser.add_argument("--context", default=None)
+    if invoked_as in REGISTERED_PLUGINS:
+        # This is a wrapped CLI call (e.g., gcloud, llm, openai)
+        wrapper = REGISTERED_PLUGINS[invoked_as]
+        args = sys.argv[1:] # Arguments passed to the wrapped CLI
 
-    # Set command
-    set_parser = subparsers.add_parser("set")
-    set_parser.add_argument("prompt")
-    set_parser.add_argument("response")
-    set_parser.add_argument("--context", default=None)
+        prompt_content, context = wrapper.parse_arguments(args)
 
-    # List command
-    list_parser = subparsers.add_parser("list")
-    list_parser.add_argument("-v", "--verbose", action="store_true")
+        if not prompt_content:
+            # If no prompt content found, just execute the command without caching
+            stdout, return_code, stderr = wrapper.execute_cli(args)
+            if stdout:
+                print(stdout)
+            if stderr:
+                print(stderr, file=sys.stderr)
+            sys.exit(return_code)
 
-    # Clear command
-    clear_parser = subparsers.add_parser("clear")
-    clear_parser.add_argument("-i", "--interactive", action="store_true")
+        cache = Cache()
+        cached_response = cache.get(prompt_content, context)
 
-    # Inspect command
-    inspect_parser = subparsers.add_parser("inspect")
-    inspect_parser.add_argument("cache_key")
-
-    # Generate completions command
-    completions_parser = subparsers.add_parser("generate-completions")
-
-    # Prune command
-    prune_parser = subparsers.add_parser("prune")
-
-    args = parser.parse_args()
-    cache = Cache()
-
-    if args.command == "get":
-        result = cache.get(args.prompt, args.context)
-        if result:
-            print(json.dumps(result, indent=4))
+        if cached_response:
+            print("--- (aicache HIT) ---", file=sys.stderr)
+            print(cached_response["response"])
+            sys.exit(0)
         else:
-            print("No cache entry found.")
-    elif args.command == "set":
-        cache.set(args.prompt, args.response, args.context)
-        print("Cache entry set.")
-    elif args.command == "list":
-        entries = cache.list(verbose=args.verbose)
-        if args.verbose:
-            for entry in entries:
-                print(json.dumps(entry, indent=4))
-        else:
-            for entry in entries:
-                print(entry)
-    elif args.command == "clear":
-        if args.interactive:
-            entries = cache.list(verbose=True)
-            if not entries:
-                print("Cache is empty.")
-                return
+            print("--- (aicache MISS) ---", file=sys.stderr)
+            stdout, return_code, stderr = wrapper.execute_cli(args)
+            if return_code == 0:
+                cache.set(prompt_content, stdout, context)
+                print(stdout)
+            if stderr:
+                print(stderr, file=sys.stderr)
+            sys.exit(return_code)
 
-            print("Select cache entries to delete (e.g., 1,3-5):")
-            for i, entry in enumerate(entries):
-                print(f"{i+1}: {entry['cache_key']} - {entry['prompt']}")
+    else:
+        # This is the aicache CLI being called directly
+        parser = argparse.ArgumentParser(description="AI Cache CLI")
+        subparsers = parser.add_subparsers(dest="command")
 
-            try:
-                selection = input("Enter numbers: ")
-                selected_indices = set()
-                for part in selection.split(','):
-                    if '-' in part:
-                        start, end = map(int, part.split('-'))
-                        selected_indices.update(range(start - 1, end))
-                    else:
-                        selected_indices.add(int(part) - 1)
+        # Get command
+        get_parser = subparsers.add_parser("get")
+        get_parser.add_argument("prompt")
+        get_parser.add_argument("--context", default=None)
 
-                for i in sorted(list(selected_indices), reverse=True):
-                    cache.delete(entries[i]['cache_key'])
-                print("Selected cache entries deleted.")
+        # Set command
+        set_parser = subparsers.add_parser("set")
+        set_parser.add_argument("prompt")
+        set_parser.add_argument("response")
+        set_parser.add_argument("--context", default=None)
 
-            except (ValueError, IndexError):
-                print("Invalid selection.")
-        else:
-            cache.clear()
-            print("Cache cleared.")
-    elif args.command == "inspect":
-        result = cache.inspect(args.cache_key)
-        if result:
-            print(json.dumps(result, indent=4))
-        else:
-            print("No cache entry found for this key.")
-    elif args.command == "generate-completions":
-        completion_script = """
+        # List command
+        list_parser = subparsers.add_parser("list")
+        list_parser.add_argument("-v", "--verbose", action="store_true")
+
+        # Clear command
+        clear_parser = subparsers.add_parser("clear")
+        clear_parser.add_argument("-i", "--interactive", action="store_true")
+
+        # Inspect command
+        inspect_parser = subparsers.add_parser("inspect")
+        inspect_parser.add_argument("cache_key")
+
+        # Generate completions command
+        completions_parser = subparsers.add_parser("generate-completions")
+
+        # Prune command
+        prune_parser = subparsers.add_parser("prune")
+
+        # Stats command
+        stats_parser = subparsers.add_parser("stats")
+
+        args = parser.parse_args()
+        cache = Cache()
+
+        if args.command == "get":
+            result = cache.get(args.prompt, args.context)
+            if result:
+                print(json.dumps(result, indent=4))
+            else:
+                print("No cache entry found.")
+        elif args.command == "set":
+            cache.set(args.prompt, args.response, args.context)
+            print("Cache entry set.")
+        elif args.command == "list":
+            entries = cache.list(verbose=args.verbose)
+            if args.verbose:
+                for entry in entries:
+                    print(json.dumps(entry, indent=4))
+            else:
+                for entry in entries:
+                    print(entry)
+        elif args.command == "clear":
+            if args.interactive:
+                entries = cache.list(verbose=True)
+                if not entries:
+                    print("Cache is empty.")
+                    return
+
+                print("Select cache entries to delete (e.g., 1,3-5):")
+                for i, entry in enumerate(entries):
+                    print(f"{i+1}: {entry['cache_key']} - {entry['prompt']}")
+
+                try:
+                    selection = input("Enter numbers: ")
+                    selected_indices = set()
+                    for part in selection.split(','):
+                        if '-' in part:
+                            start, end = map(int, part.split('-'))
+                            selected_indices.update(range(start - 1, end))
+                        else:
+                            selected_indices.add(int(part) - 1)
+
+                    for i in sorted(list(selected_indices), reverse=True):
+                        cache.delete(entries[i]['cache_key'])
+                    print("Selected cache entries deleted.")
+
+                except (ValueError, IndexError):
+                    print("Invalid selection.")
+            else:
+                cache.clear()
+                print("Cache cleared.")
+        elif args.command == "inspect":
+            result = cache.inspect(args.cache_key)
+            if result:
+                print(json.dumps(result, indent=4))
+            else:
+                print("No cache entry found for this key.")
+        elif args.command == "generate-completions":
+            completion_script = """
 _aicache_completions()
 {
     local cur_word prev_word
@@ -101,7 +144,7 @@ _aicache_completions()
 
     case "${prev_word}" in
         aicache)
-            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune" -- ${cur_word}) )
+            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune stats" -- ${cur_word}) )
             ;;
         list)
             COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur_word}) )
@@ -117,19 +160,19 @@ _aicache_completions()
 
 complete -F _aicache_completions aicache
 """
-        print(completion_script)
-    elif args.command == "prune":
-        pruned_count = cache.prune()
-        print(f"Pruned {pruned_count} expired cache entries.")
-    elif args.command == "stats":
-        stats = cache.stats()
-        print("Cache Statistics:")
-        print(f"  Total entries: {stats['num_entries']}")
-        print(f"  Total size: {stats['total_size']} bytes")
-        if stats['num_expired'] > 0:
-            print(f"  Expired entries: {stats['num_expired']}")
-    else:
-        parser.print_help()
+            print(completion_script)
+        elif args.command == "prune":
+            pruned_count = cache.prune()
+            print(f"Pruned {pruned_count} expired cache entries.")
+        elif args.command == "stats":
+            stats = cache.stats()
+            print("Cache Statistics:")
+            print(f"  Total entries: {stats['num_entries']}")
+            print(f"  Total size: {stats['total_size']} bytes")
+            if stats['num_expired'] > 0:
+                print(f"  Expired entries: {stats['num_expired']}")
+        else:
+            parser.print_help()
 
 if __name__ == "__main__":
     main()

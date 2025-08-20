@@ -27,7 +27,7 @@ This project is a caching system for AI CLIs (Gemini, Claude, and OpenAI) to imp
     ```bash
     make setup
     ```
-    This will install the `aicache` package and copy the wrapper scripts to `~/.local/bin`.
+    This will install the `aicache` package in a virtual environment and create symbolic links for `gcloud`, `llm`, and `openai` in `~/.local/bin` that point to the `aicache` executable.
 
 3.  **Update your shell's configuration:**
     Make sure `~/.local/bin` is in your `$PATH` and has precedence over the default paths. Add the following line to your `~/.bashrc`, `~/.zshrc`, or other shell configuration file:

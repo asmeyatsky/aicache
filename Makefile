@@ -11,8 +11,9 @@ install:
 
 install-wrappers:
 	mkdir -p ~/.local/bin
-	cp scripts/gcloud_wrapper.py ~/.local/bin/gcloud
-	cp scripts/llm_wrapper.py ~/.local/bin/llm
+	cp $(VENV_DIR)/bin/aicache ~/.local/bin/gcloud
+	cp $(VENV_DIR)/bin/aicache ~/.local/bin/llm
+	cp $(VENV_DIR)/bin/aicache ~/.local/bin/openai
 	@echo "Wrapper scripts installed in ~/.local/bin"
 	@echo "Please ensure ~/.local/bin is in your PATH and has precedence."
 
