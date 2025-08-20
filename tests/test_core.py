@@ -56,5 +56,23 @@ class TestCache(unittest.TestCase):
         key3 = self.cache._get_cache_key("prompt", "different_context")
         self.assertNotEqual(key1, key3)
 
+    def test_inspect(self):
+        prompt = "test inspect"
+        response = "inspect response"
+        self.cache.set(prompt, response)
+        cache_key = self.cache._get_cache_key(prompt, None)
+        inspected_data = self.cache.inspect(cache_key)
+        self.assertEqual(inspected_data["prompt"], prompt)
+        self.assertEqual(inspected_data["response"], response)
+
+    def test_delete(self):
+        prompt = "test delete"
+        response = "delete response"
+        self.cache.set(prompt, response)
+        cache_key = self.cache._get_cache_key(prompt, None)
+        self.assertTrue(self.cache.delete(cache_key))
+        self.assertIsNone(self.cache.get(prompt))
+        self.assertFalse(self.cache.delete("non_existent_key"))
+
 if __name__ == '__main__':
     unittest.main()

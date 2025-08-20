@@ -1,4 +1,5 @@
 import argparse
+import json
 from .core import Cache
 
 def main():
@@ -18,9 +19,18 @@ def main():
 
     # List command
     list_parser = subparsers.add_parser("list")
+    list_parser.add_argument("-v", "--verbose", action="store_true")
 
     # Clear command
     clear_parser = subparsers.add_parser("clear")
+    clear_parser.add_argument("-i", "--interactive", action="store_true")
+
+    # Inspect command
+    inspect_parser = subparsers.add_parser("inspect")
+    inspect_parser.add_argument("cache_key")
+
+    # Generate completions command
+    completions_parser = subparsers.add_parser("generate-completions")
 
     args = parser.parse_args()
     cache = Cache()
@@ -28,7 +38,7 @@ def main():
     if args.command == "get":
         result = cache.get(args.prompt, args.context)
         if result:
-            print(result)
+            print(json.dumps(result, indent=4))
         else:
             print("No cache entry found.")
     elif args.command == "set":
