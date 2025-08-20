@@ -2,6 +2,10 @@ import argparse
 import json
 import sys
 import os
+from pathlib import Path
+import shutil # Added for create-generic-wrapper
+import re # Added for create-generic-wrapper
+
 from .core import Cache
 from .plugins import REGISTERED_PLUGINS
 
@@ -78,6 +82,13 @@ def main():
         # Stats command
         stats_parser = subparsers.add_parser("stats")
 
+        # Create Generic Wrapper command
+        create_generic_wrapper_parser = subparsers.add_parser("create-generic-wrapper")
+        create_generic_wrapper_parser.add_argument("cli_name")
+        create_generic_wrapper_parser.add_argument("--path", required=True)
+        create_generic_wrapper_parser.add_argument("--prompt-regex", required=True)
+        create_generic_wrapper_parser.add_argument("--model-arg", default=None)
+
         args = parser.parse_args()
         cache = Cache()
 
@@ -144,7 +155,7 @@ _aicache_completions()
 
     case "${prev_word}" in
         aicache)
-            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune stats" -- ${cur_word}) )
+            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune stats create-generic-wrapper" -- ${cur_word}) )
             ;;
         list)
             COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur_word}) )
@@ -171,6 +182,106 @@ complete -F _aicache_completions aicache
             print(f"  Total size: {stats['total_size']} bytes")
             if stats['num_expired'] > 0:
                 print(f"  Expired entries: {stats['num_expired']}")
+        elif args.command == "create-generic-wrapper":
+            # Generate the content of the generic wrapper script
+            wrapper_content = f"""#!/usr/bin/env python3
+
+import shutil
+import re
+import sys
+import os
+from pathlib import Path
+
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+
+from aicache.core import Cache
+from aicache.plugins.base import CLIWrapper as BaseCLIWrapper # Import BaseCLIWrapper
+
+class CustomCLIWrapper:
+    def __init__(self):
+        self.cli_name = "{args.cli_name}"
+        self.real_cli_path = "{args.path}"
+        self.prompt_regex = r"{args.prompt_regex}"
+        self.model_arg = "{args.model_arg}" if "{args.model_arg}" != "None" else None
+
+    def get_cli_name(self) -> str:
+        return self.cli_name
+
+    def parse_arguments(self, args: list) -> tuple[str, dict]:
+        prompt_content = ""
+        model = None
+
+        # Extract prompt using regex
+        args_str = " ".join(args)
+        match = re.search(self.prompt_regex, args_str)
+        if match:
+            prompt_content = match.group(1)
+
+        # Extract model if model_arg is provided
+        if self.model_arg:
+            i = 0
+            while i < len(args):
+                if args[i] == self.model_arg:
+                    if i + 1 < len(args):
+                        model = args[i+1]
+                        break
+                    else:
+                        i += 1
+                else:
+                    i += 1
+
+        context = {{"model": model}}
+        return prompt_content, context
+
+    def execute_cli(self, args: list) -> tuple[str, int, str}:
+        if not shutil.which(self.real_cli_path):
+            return "", 1, f"Error: {{self.real_cli_path}} executable not found."
+
+        # Use the _run_cli_command from the BaseCLIWrapper
+        base_wrapper_instance = BaseCLIWrapper()
+        return base_wrapper_instance._run_cli_command(self.real_cli_path, args)
+
+# Main execution logic for the generated wrapper
+def generated_wrapper_main(): # Renamed to avoid conflict with main()
+    wrapper = CustomCLIWrapper()
+    args = sys.argv[1:]
+
+    prompt_content, context = wrapper.parse_arguments(args)
+
+    cache = Cache()
+    cached_response = cache.get(prompt_content, context)
+
+    if cached_response:
+        print("--- (aicache HIT) ---", file=sys.stderr)
+        print(cached_response["response"])
+        sys.exit(0)
+    else:
+        print("--- (aicache MISS) ---", file=sys.stderr)
+        stdout, return_code, stderr = wrapper.execute_cli(args)
+        if return_code == 0:
+            cache.set(prompt_content, stdout, context)
+            print(stdout)
+        if stderr:
+            print(stderr, file=sys.stderr)
+        sys.exit(return_code)
+
+if __name__ == "__main__":
+    generated_wrapper_main() # Call the renamed main function
+"""
+            # Write the wrapper content to a file
+            output_dir = Path.cwd() / "custom_wrappers"
+            output_dir.mkdir(exist_ok=True)
+            output_file = output_dir / f"{args.cli_name}_wrapper.py"
+            with open(output_file, "w") as f:
+                f.write(wrapper_content)
+            
+            # Make it executable
+            os.chmod(output_file, 0o755)
+
+            print(f"Generic wrapper for '{args.cli_name}' created at: {output_file}")
+            print(f"To use it, add '{output_dir}' to your PATH before the real CLI's path, or create a symlink:")
+            print(f"ln -s {output_file} ~/.local/bin/{args.cli_name}")
         else:
             parser.print_help()
 
