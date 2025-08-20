@@ -46,11 +46,46 @@ class Cache:
                 "context": context
             }, f)
 
-    def list(self):
+    def list(self, verbose=False):
         # List all cache entries
-        return [f.name for f in self.cache_dir.iterdir()]
+        entries = []
+        for f in self.cache_dir.iterdir():
+            if verbose:
+                with open(f, 'r') as cache_file:
+                    try:
+                        data = json.load(cache_file)
+                        entries.append({
+                            "cache_key": f.name,
+                            "prompt": data.get("prompt"),
+                            "context": data.get("context")
+                        })
+                    except json.JSONDecodeError:
+                        # Handle cases where the file is not a valid JSON
+                        entries.append({
+                            "cache_key": f.name,
+                            "error": "Invalid JSON format"
+                        })
+            else:
+                entries.append(f.name)
+        return entries
 
     def clear(self):
         # Clear the cache
         for f in self.cache_dir.iterdir():
             f.unlink()
+
+    def inspect(self, cache_key):
+        # Inspect a cache entry
+        cache_file = self.cache_dir / cache_key
+        if cache_file.exists():
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        return None
+
+    def delete(self, cache_key):
+        # Delete a specific cache entry
+        cache_file = self.cache_dir / cache_key
+        if cache_file.exists():
+            cache_file.unlink()
+            return True
+        return False
