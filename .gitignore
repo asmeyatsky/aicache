@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.so
+*.egg
+
+# Cache
+.aicache/
+
+# Test artifacts
+.pytest_cache/
+test_project/
