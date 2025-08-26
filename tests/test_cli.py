@@ -16,6 +16,8 @@ class TestCLI(unittest.TestCase):
         self.cli_path = [sys.executable, "-m", "aicache.cli"]
         self.env = os.environ.copy()
         self.env["PYTHONPATH"] = os.path.abspath(os.path.join(os.path.dirname(__file__), '../src'))
+        # Clear the cache before each test
+        subprocess.run(self.cli_path + ["clear"], env=self.env, check=True)
 
     def tearDown(self):
         os.chdir("..")

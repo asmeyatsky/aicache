@@ -14,7 +14,7 @@ def main():
 
     if invoked_as in REGISTERED_PLUGINS:
         # This is a wrapped CLI call (e.g., gcloud, llm, openai)
-        wrapper = REGISTERED_PLUGINS[invoked_as]
+        wrapper = REGISTERED_PLUGINS[invoked_as]()
         args = sys.argv[1:] # Arguments passed to the wrapped CLI
 
         prompt_content, context = wrapper.parse_arguments(args)
@@ -150,8 +150,8 @@ def main():
 _aicache_completions()
 {
     local cur_word prev_word
-    cur_word="${COMP_WORDS[COMP_CWORD]}"
-    prev_word="${COMP_WORDS[COMP_CWORD-1]}"
+    cur_word=\"${COMP_WORDS[COMP_CWORD]}\"
+    prev_word=\"${COMP_WORDS[COMP_CWORD-1]}\"
 
     case "${prev_word}" in
         aicache)
@@ -231,10 +231,10 @@ class CustomCLIWrapper:
                 else:
                     i += 1
 
-        context = {{"model": model}}
+        context = {{'model': model}}
         return prompt_content, context
 
-    def execute_cli(self, args: list) -> tuple[str, int, str}:
+    def execute_cli(self, args: list) -> tuple[str, int, str]:
         if not shutil.which(self.real_cli_path):
             return "", 1, f"Error: {{self.real_cli_path}} executable not found."
 

@@ -6,57 +6,36 @@ from pathlib import Path
 from .config import get_config
 
 class Cache:
-    def __init__(self, project_path=None):
-        self.config = get_config()
-        
-        # Try to find a project-specific cache first
-        try:
-            project_root = self._find_project_root()
-            self.cache_dir = project_root / ".aicache"
-        except FileNotFoundError:
-            # If not in a project, use the global cache directory
-            self.cache_dir = Path(self.config["cache_dir"]).expanduser()
-
+    def __init__(self, cache_dir=None):
+        if cache_dir is None:
+            cache_dir = os.path.expanduser("~/.cache/aicache")
+        self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _find_project_root(self):
-        # Find the project root by looking for a .git directory
-        current_dir = Path.cwd()
-        while current_dir != current_dir.parent:
-            if (current_dir / ".git").is_dir():
-                return current_dir
-            current_dir = current_dir.parent
-        raise FileNotFoundError("Could not find the project root. Make sure you are in a git repository.")
-
-    def _get_cache_key(self, prompt, context):
-        # Create a unique key for the cache entry
+    def _get_cache_key(self, prompt, context=None):
+        """Creates a unique, deterministic cache key from the prompt and context."""
         hasher = hashlib.sha256()
         hasher.update(prompt.encode('utf-8'))
         if context:
-            hasher.update(str(context).encode('utf-8'))
+            # Sort context dict by key for consistent hash
+            sorted_context = json.dumps(context, sort_keys=True)
+            hasher.update(sorted_context.encode('utf-8'))
         return hasher.hexdigest()
 
     def get(self, prompt, context=None):
-        # Get a cache entry
+        """Gets a cache entry by prompt and context."""
         cache_key = self._get_cache_key(prompt, context)
         cache_file = self.cache_dir / cache_key
         if cache_file.exists():
             with open(cache_file, 'r') as f:
                 try:
-                    data = json.load(f)
-                    if self.config["ttl"] > 0:
-                        age = time.time() - data.get("timestamp", 0)
-                        if age > self.config["ttl"]:
-                            # Cache entry has expired
-                            self.delete(cache_key)
-                            return None
-                    return data
+                    return json.load(f)
                 except json.JSONDecodeError:
                     return None
         return None
 
     def set(self, prompt, response, context=None):
-        # Set a cache entry
+        """Sets a cache entry by prompt, response, and context."""
         cache_key = self._get_cache_key(prompt, context)
         cache_file = self.cache_dir / cache_key
         with open(cache_file, 'w') as f:
@@ -64,16 +43,15 @@ class Cache:
                 "prompt": prompt,
                 "response": response,
                 "context": context,
-                "timestamp": time.time()
+                "timestamp": time.time(),
             }, f)
-        
-        # Prune cache by size if needed
-        self.prune_by_size()
 
     def list(self, verbose=False):
-        # List all cache entries
+        """Lists all cache entries."""
         entries = []
         for f in self.cache_dir.iterdir():
+            if not f.is_file():
+                continue
             if verbose:
                 with open(f, 'r') as cache_file:
                     try:
@@ -81,107 +59,63 @@ class Cache:
                         entries.append({
                             "cache_key": f.name,
                             "prompt": data.get("prompt"),
-                            "context": data.get("context")
+                            "context": data.get("context"),
+                            "timestamp": data.get("timestamp"),
                         })
                     except json.JSONDecodeError:
-                        # Handle cases where the file is not a valid JSON
-                        entries.append({
-                            "cache_key": f.name,
-                            "error": "Invalid JSON format"
-                        })
+                        entries.append({"cache_key": f.name, "error": "Invalid JSON"})
             else:
                 entries.append(f.name)
         return entries
 
     def clear(self):
-        # Clear the cache
+        """Clears the entire cache."""
         for f in self.cache_dir.iterdir():
-            f.unlink()
+            if f.is_file():
+                f.unlink()
 
     def inspect(self, cache_key):
-        # Inspect a cache entry
+        """Inspects a specific cache entry by its key."""
         cache_file = self.cache_dir / cache_key
         if cache_file.exists():
             with open(cache_file, 'r') as f:
-                return json.load(f)
+                try:
+                    return json.load(f)
+                except json.JSONDecodeError:
+                    return {"error": "Invalid JSON"}
         return None
 
     def delete(self, cache_key):
-        # Delete a specific cache entry
+        """Deletes a specific cache entry by its key."""
         cache_file = self.cache_dir / cache_key
-        if cache_file.exists():
+        if cache_file.exists() and cache_file.is_file():
             cache_file.unlink()
             return True
         return False
 
-    def prune(self):
-        # Remove expired cache entries
-        if self.config["ttl"] <= 0:
-            return 0  # TTL is not enabled
-
+    def prune(self, max_age_days=30):
+        """Removes cache entries older than a certain number of days."""
         pruned_count = 0
         for f in self.cache_dir.iterdir():
-            with open(f, 'r') as cache_file:
-                try:
+            if not f.is_file():
+                continue
+            try:
+                with open(f, 'r') as cache_file:
                     data = json.load(cache_file)
-                    age = time.time() - data.get("timestamp", 0)
-                    if age > self.config["ttl"]:
+                    timestamp = data.get("timestamp")
+                    if timestamp and (time.time() - timestamp) > (max_age_days * 86400):
                         f.unlink()
                         pruned_count += 1
-                except (json.JSONDecodeError, IsADirectoryError):
-                    # Ignore invalid JSON files or directories
-                    pass
+            except (json.JSONDecodeError, FileNotFoundError):
+                continue
         return pruned_count
 
-    def get_cache_size(self):
-        # Get the total size of the cache directory
-        return sum(f.stat().st_size for f in self.cache_dir.glob('**/*') if f.is_file())
-
-    def prune_by_size(self):
-        # Prune the cache by size, removing the oldest entries first
-        if self.config["cache_size_limit"] <= 0:
-            return
-
-        cache_size = self.get_cache_size()
-        if cache_size > self.config["cache_size_limit"]:
-            # Get all cache entries with their timestamps
-            entries = []
-            for f in self.cache_dir.iterdir():
-                try:
-                    with open(f, 'r') as cache_file:
-                        data = json.load(cache_file)
-                        entries.append((f, data.get("timestamp", 0)))
-                except (json.JSONDecodeError, IsADirectoryError):
-                    pass
-            
-            # Sort entries by timestamp (oldest first)
-            entries.sort(key=lambda x: x[1])
-
-            # Prune oldest entries until the size is below the limit
-            for f, _ in entries:
-                if self.get_cache_size() <= self.config["cache_size_limit"]:
-                    break
-                f.unlink()
-
     def stats(self):
-        # Get cache statistics
-        num_entries = len(list(self.cache_dir.iterdir()))
-        total_size = self.get_cache_size()
-        
-        num_expired = 0
-        if self.config["ttl"] > 0:
-            for f in self.cache_dir.iterdir():
-                with open(f, 'r') as cache_file:
-                    try:
-                        data = json.load(cache_file)
-                        age = time.time() - data.get("timestamp", 0)
-                        if age > self.config["ttl"]:
-                            num_expired += 1
-                    except (json.JSONDecodeError, IsADirectoryError):
-                        pass
-
-        return {
-            "num_entries": num_entries,
-            "total_size": total_size,
-            "num_expired": num_expired,
-        }
+        """Gets statistics about the cache."""
+        num_entries = 0
+        total_size = 0
+        for f in self.cache_dir.iterdir():
+            if f.is_file():
+                num_entries += 1
+                total_size += f.stat().st_size
+        return {"num_entries": num_entries, "total_size": total_size}
