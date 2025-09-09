@@ -20,6 +20,9 @@ from contextlib import asynccontextmanager
 from collections import defaultdict
 
 from .config import get_config
+
+logger = logging.getLogger(__name__)
+
 try:
     from .semantic import SemanticCache, SemanticCacheEntry
     SEMANTIC_AVAILABLE = True
@@ -35,7 +38,31 @@ except ImportError:
     LLM_SERVICE_AVAILABLE = False
     LLMService = None
 
-logger = logging.getLogger(__name__)
+try:
+    from .behavioral import BehavioralAnalyzer
+    from .predictive import PredictivePrefetcher, ContextualLearner
+    from .intent import IntentBasedCache, IntentAnalyzer
+    from .proactive import ProactiveCodeGenerator
+    BEHAVIORAL_AVAILABLE = True
+    logger.debug("Behavioral modules imported successfully")
+except ImportError as e:
+    BEHAVIORAL_AVAILABLE = False
+    BehavioralAnalyzer = None
+    PredictivePrefetcher = None
+    ContextualLearner = None
+    IntentBasedCache = None
+    IntentAnalyzer = None
+    ProactiveCodeGenerator = None
+    logger.warning(f"Behavioral modules not available: {e}")
+except Exception as e:
+    BEHAVIORAL_AVAILABLE = False
+    BehavioralAnalyzer = None
+    PredictivePrefetcher = None
+    ContextualLearner = None
+    IntentBasedCache = None
+    IntentAnalyzer = None
+    ProactiveCodeGenerator = None
+    logger.warning(f"Behavioral modules failed to load: {e}")
 
 @dataclass
 class AdvancedContext:
@@ -278,17 +305,65 @@ class EnhancedCache:
         # Initialize intelligent cache manager
         self.cache_manager = IntelligentCacheManager(self.config.get('intelligent_management', {}))
         
+        # Initialize behavioral system
+        if BEHAVIORAL_AVAILABLE and self.config.get('behavioral_learning', {}).get('enabled', True):
+            self.behavioral_analyzer = BehavioralAnalyzer(str(self.cache_dir))
+            self.predictive_prefetcher = None  # Initialized in init_async
+            self.contextual_learner = None
+            self.proactive_generator = None  # Initialized in init_async
+            # Initialize intent-based cache - always available now
+            self.intent_cache = IntentBasedCache(None)  # No LLM service needed for basic functionality
+        else:
+            self.behavioral_analyzer = None
+            self.predictive_prefetcher = None
+            self.contextual_learner = None
+            self.proactive_generator = None
+            self.intent_cache = None
+            logger.info("Behavioral learning disabled")
+        
         # Initialize metrics
         self.metrics = CacheMetrics()
         
         # Project detector
         self.project_detector = ProjectDetector()
         
+        # Session tracking for behavioral analysis
+        self.current_session_id = None
+        self.current_user_id = "default"  # In practice, would be detected/configured
+        
         logger.info(f"Enhanced cache initialized at {self.cache_dir}")
 
     async def init_async(self):
         await self._init_database()
         await self._load_metrics()
+        
+        # Initialize behavioral system
+        if self.behavioral_analyzer:
+            await self.behavioral_analyzer.init_db()
+            self.predictive_prefetcher = PredictivePrefetcher(self, self.behavioral_analyzer)
+            self.contextual_learner = ContextualLearner(self.behavioral_analyzer)
+            
+            # Initialize proactive code generator - always available now with fallback
+            if ProactiveCodeGenerator:
+                # Create LLM service if available
+                if LLM_SERVICE_AVAILABLE:
+                    self.llm_service = LLMService(self.config.get('llm_service', {}))
+                else:
+                    self.llm_service = None
+                self.proactive_generator = ProactiveCodeGenerator(self.llm_service, self.behavioral_analyzer)
+                await self.proactive_generator.start()
+            
+            # Start predictive prefetching
+            await self.predictive_prefetcher.start()
+            
+            # Run contextual learning analysis
+            await self.contextual_learner.analyze_context_patterns()
+            
+            logger.info("Behavioral learning system initialized and started")
+        
+        # Generate session ID
+        import uuid
+        self.current_session_id = str(uuid.uuid4())[:8]
 
     async def _init_database(self):
         """Initialize SQLite database for structured cache storage."""
@@ -500,7 +575,7 @@ class EnhancedCache:
         return dt.strftime('%A').lower()
     
     async def get(self, prompt: str, context: Union[Dict[str, Any], AdvancedContext] = None) -> Optional[Dict[str, Any]]:
-        """Get cache entry with semantic search fallback."""
+        """Get cache entry with semantic search fallback and behavioral analysis."""
         enhanced_context = self._enhance_context(context if isinstance(context, dict) else (context.to_dict() if context else None))
         
         # Update metrics
@@ -508,6 +583,8 @@ class EnhancedCache:
         
         # First, try exact match
         cache_key = self._get_cache_key(prompt, enhanced_context)
+        cache_hit = False
+        result = None
         
         async with self._get_db_connection() as conn:
             cursor = await conn.execute(
@@ -521,9 +598,10 @@ class EnhancedCache:
                 await self._update_access_stats(cache_key, conn)
                 self.metrics.cache_hits += 1
                 self.metrics.exact_hits += 1
+                cache_hit = True
                 
                 response = self._deserialize_data(row['response'])
-                return {
+                result = {
                     'prompt': row['prompt'],
                     'response': response,
                     'context': self._deserialize_data(row['context']),
@@ -531,8 +609,37 @@ class EnhancedCache:
                     'cache_type': 'exact'
                 }
         
+        # If no exact match, try intent-based matching
+        if not result and self.intent_cache:
+            intent_result = await self.intent_cache.get_by_intent(prompt, enhanced_context.to_dict())
+            if intent_result:
+                canonical_key, intent_data = intent_result
+                # Try to get the canonical cache entry
+                async with self._get_db_connection() as conn:
+                    cursor = await conn.execute(
+                        'SELECT * FROM cache_entries WHERE cache_key = ?', 
+                        (canonical_key,)
+                    )
+                    row = await cursor.fetchone()
+                    
+                    if row:
+                        # Intent-based match found
+                        await self._update_access_stats(canonical_key, conn)
+                        self.metrics.cache_hits += 1
+                        cache_hit = True
+                        
+                        response = self._deserialize_data(row['response'])
+                        result = {
+                            'prompt': row['prompt'],
+                            'response': response,
+                            'context': self._deserialize_data(row['context']),
+                            'timestamp': row['timestamp'],
+                            'cache_type': 'intent',
+                            'intent_data': intent_data
+                        }
+        
         # If no exact match, try semantic search
-        if self.semantic_cache and self.semantic_cache.enabled:
+        if not result and self.semantic_cache and self.semantic_cache.enabled:
             semantic_result = await self.semantic_cache.get_similar(prompt, enhanced_context.to_dict())
             
             if semantic_result:
@@ -548,9 +655,10 @@ class EnhancedCache:
                         await self._update_access_stats(semantic_result.cache_key, conn)
                         self.metrics.cache_hits += 1
                         self.metrics.semantic_hits += 1
+                        cache_hit = True
                         
                         response = self._deserialize_data(row['response'])
-                        return {
+                        result = {
                             'prompt': row['prompt'],
                             'response': response,
                             'context': self._deserialize_data(row['context']),
@@ -559,9 +667,37 @@ class EnhancedCache:
                             'similarity_score': getattr(semantic_result, 'similarity_score', 0.0)
                         }
         
-        # No match found
-        self.metrics.cache_misses += 1
-        return None
+        # Update metrics if no match
+        if not cache_hit:
+            self.metrics.cache_misses += 1
+        
+        # Behavioral analysis and prediction
+        if self.predictive_prefetcher and self.current_session_id:
+            try:
+                await self.predictive_prefetcher.analyze_and_predict(
+                    user_id=self.current_user_id,
+                    session_id=self.current_session_id,
+                    query=prompt,
+                    context=enhanced_context.to_dict(),
+                    cache_hit=cache_hit
+                )
+            except Exception as e:
+                logger.error(f"Behavioral analysis error: {e}")
+        
+        # Proactive code generation
+        if self.proactive_generator and self.current_session_id:
+            try:
+                await self.proactive_generator.analyze_and_generate(
+                    user_id=self.current_user_id,
+                    session_id=self.current_session_id,
+                    query=prompt,
+                    context=enhanced_context.to_dict(),
+                    cache_hit=cache_hit
+                )
+            except Exception as e:
+                logger.error(f"Proactive generation error: {e}")
+        
+        return result
     
     async def set(self, prompt: str, response: str, context: Union[Dict[str, Any], AdvancedContext] = None, 
             cost_estimate: float = 1.0) -> str:
@@ -602,6 +738,13 @@ class EnhancedCache:
         # Add to semantic cache
         if self.semantic_cache and self.semantic_cache.enabled:
             await self.semantic_cache.add(prompt, response, enhanced_context.to_dict())
+        
+        # Link intent to cache if intent analysis was performed
+        if self.intent_cache:
+            # Analyze intent for this entry
+            intent_entry = await self.intent_cache.intent_analyzer.analyze_intent(prompt, enhanced_context.to_dict())
+            if intent_entry:
+                await self.intent_cache.link_intent_to_cache(intent_entry.intent_hash, cache_key)
         
         # Update cache manager
         self.cache_manager.set_cost_estimate(cache_key, cost_estimate)

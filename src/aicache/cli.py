@@ -143,6 +143,25 @@ async def main():
         uninstall_parser = subparsers.add_parser("uninstall")
         uninstall_parser.add_argument("tool", help="Tool to remove wrapper for")
 
+        # Analytics command
+        analytics_parser = subparsers.add_parser("analytics")
+        analytics_parser.add_argument("--behavioral", action="store_true", help="Show behavioral analytics")
+        analytics_parser.add_argument("--prefetch", action="store_true", help="Show prefetch statistics")
+        analytics_parser.add_argument("--patterns", action="store_true", help="Show learned patterns")
+        analytics_parser.add_argument("--export", help="Export analytics to file")
+
+        # Predict command
+        predict_parser = subparsers.add_parser("predict")
+        predict_parser.add_argument("query", help="Query to predict next steps for")
+        predict_parser.add_argument("--context", help="Context for prediction")
+        predict_parser.add_argument("--confidence", type=float, default=0.6, help="Minimum confidence threshold")
+
+        # Prefetch command
+        prefetch_parser = subparsers.add_parser("prefetch")
+        prefetch_parser.add_argument("query", help="Query to prefetch")
+        prefetch_parser.add_argument("--context", help="Context for prefetch")
+        prefetch_parser.add_argument("--priority", type=int, choices=[1,2,3], default=2, help="Prefetch priority")
+
         args = parser.parse_args()
         cache = Cache()
         
@@ -476,6 +495,129 @@ if __name__ == "__main__":
                 print(f"✅ Removed {args.tool} wrapper")
             else:
                 print(f"❌ Failed to remove {args.tool} wrapper")
+        elif args.command == "analytics":
+            # Check if enhanced cache is available
+            if not hasattr(cache, 'behavioral_analyzer') or not cache.behavioral_analyzer:
+                print("❌ Behavioral analytics not available. Enhanced cache required.")
+                return
+            
+            if args.behavioral or not any([args.prefetch, args.patterns]):
+                # Show behavioral analytics
+                analytics = await cache.behavioral_analyzer.get_analytics()
+                print("📊 Behavioral Analytics:")
+                print("-" * 40)
+                print(f"Total Queries:      {analytics['total_queries']}")
+                print(f"Cache Hit Rate:     {analytics['cache_hit_rate']:.2%}")
+                print(f"Unique Users:       {analytics['unique_users']}")
+                print(f"Unique Sessions:    {analytics['unique_sessions']}")
+                print(f"Queries/Session:    {analytics['queries_per_session']:.1f}")
+                print(f"Active Patterns:    {analytics['active_patterns']}")
+                print(f"Total Patterns:     {analytics['total_patterns']}")
+                print(f"Context Triggers:   {analytics['contextual_triggers']}")
+            
+            if args.prefetch and cache.predictive_prefetcher:
+                # Show prefetch statistics
+                prefetch_stats = await cache.predictive_prefetcher.get_prefetch_stats()
+                print("\n🚀 Prefetch Statistics:")
+                print("-" * 40)
+                print(f"Total Prefetches:   {prefetch_stats['total_prefetches']}")
+                print(f"Success Rate:       {prefetch_stats['success_rate']:.2%}")
+                print(f"Avg Execution:      {prefetch_stats['avg_execution_time']:.2f}s")
+                print(f"Total Cost:         ${prefetch_stats['total_estimated_cost']:.2f}")
+                print(f"Current Hour Cost:  ${prefetch_stats['current_hour_cost']:.2f}")
+                print(f"Active Prefetches:  {prefetch_stats['active_prefetches']}")
+                print(f"Queue Size:         {prefetch_stats['queue_size']}")
+                print(f"Status:             {'🟢 Running' if prefetch_stats['running'] else '🔴 Stopped'}")
+                
+                if prefetch_stats['trigger_stats']:
+                    print("\nTrigger Performance:")
+                    for reason, stats in prefetch_stats['trigger_stats'].items():
+                        success_rate = stats['successful'] / stats['total'] if stats['total'] > 0 else 0
+                        print(f"  {reason}: {stats['successful']}/{stats['total']} ({success_rate:.1%})")
+            
+            if args.patterns:
+                # Show learned patterns (top 10)
+                print("\n🧠 Top Learned Patterns:")
+                print("-" * 40)
+                sorted_patterns = sorted(cache.behavioral_analyzer.patterns.items(), 
+                                       key=lambda x: x[1].frequency, reverse=True)[:10]
+                for i, (pattern_hash, pattern) in enumerate(sorted_patterns, 1):
+                    sequence_preview = " → ".join(pattern.sequence[:3])
+                    if len(pattern.sequence) > 3:
+                        sequence_preview += "..."
+                    print(f"{i:2}. {sequence_preview}")
+                    print(f"    Frequency: {pattern.frequency}, Success: {pattern.success_rate:.1%}")
+            
+            if args.export:
+                # Export analytics to file
+                all_analytics = {
+                    'behavioral': analytics,
+                    'timestamp': time.time()
+                }
+                if cache.predictive_prefetcher:
+                    all_analytics['prefetch'] = await cache.predictive_prefetcher.get_prefetch_stats()
+                
+                import json
+                with open(args.export, 'w') as f:
+                    json.dump(all_analytics, f, indent=2)
+                print(f"✅ Analytics exported to {args.export}")
+                
+        elif args.command == "predict":
+            if not hasattr(cache, 'behavioral_analyzer') or not cache.behavioral_analyzer:
+                print("❌ Prediction not available. Enhanced cache with behavioral learning required.")
+                return
+            
+            # Parse context
+            context = {}
+            if args.context:
+                try:
+                    context = json.loads(args.context)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON context: {args.context}")
+            
+            # Get predictions
+            recent_queries = [cache.behavioral_analyzer._get_query_hash(args.query, context)]
+            predictions = await cache.behavioral_analyzer.predict_next_queries(
+                user_id=cache.current_user_id,
+                session_id=cache.current_session_id or "predict-session",
+                recent_queries=recent_queries,
+                context=context
+            )
+            
+            print(f"🔮 Predictions for: {args.query}")
+            print("-" * 50)
+            
+            if predictions:
+                for i, (query_hash, confidence) in enumerate(predictions, 1):
+                    if confidence >= args.confidence:
+                        print(f"{i}. Query Hash: {query_hash}")
+                        print(f"   Confidence: {confidence:.2%}")
+            else:
+                print("No predictions found above confidence threshold.")
+                
+        elif args.command == "prefetch":
+            if not hasattr(cache, 'predictive_prefetcher') or not cache.predictive_prefetcher:
+                print("❌ Prefetch not available. Enhanced cache with behavioral learning required.")
+                return
+            
+            # Parse context
+            context = {}
+            if args.context:
+                try:
+                    context = json.loads(args.context)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON context: {args.context}")
+            
+            # Schedule prefetch
+            await cache.predictive_prefetcher.force_prefetch(
+                query=args.query,
+                context=context,
+                priority=args.priority
+            )
+            
+            print(f"🚀 Prefetch scheduled for: {args.query}")
+            print(f"   Priority: {args.priority}")
+            print(f"   Context: {context}")
         else:
             parser.print_help()
 
