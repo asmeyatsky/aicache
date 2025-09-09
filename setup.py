@@ -12,5 +12,17 @@ setup(
     },
     install_requires=[
         "PyYAML",
+        "rank-bm25",
+        "sentence-transformers",
+        "numpy",
+        "chromadb",
+        "faiss-cpu",
+        "nltk",
+        "Pillow",
+        "nbformat",
+        "aiofiles",
+        "aiosqlite",
+        "msgpack",
+        "ollama",
     ],
 )

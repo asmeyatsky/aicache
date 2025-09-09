@@ -2,14 +2,18 @@ import argparse
 import json
 import sys
 import os
+import asyncio
 from pathlib import Path
 import shutil # Added for create-generic-wrapper
 import re # Added for create-generic-wrapper
 
-from .core import Cache
+try:
+    from .enhanced_core import EnhancedCache as Cache
+except ImportError:
+    from .core import Cache
 from .plugins import REGISTERED_PLUGINS
 
-def main():
+async def main():
     invoked_as = os.path.basename(sys.argv[0])
 
     if invoked_as in REGISTERED_PLUGINS:
@@ -21,7 +25,7 @@ def main():
 
         if not prompt_content:
             # If no prompt content found, just execute the command without caching
-            stdout, return_code, stderr = wrapper.execute_cli(args)
+            stdout, return_code, stderr = await wrapper.execute_cli(args)
             if stdout:
                 print(stdout)
             if stderr:
@@ -29,7 +33,9 @@ def main():
             sys.exit(return_code)
 
         cache = Cache()
-        cached_response = cache.get(prompt_content, context)
+        await cache.init_async()
+        await cache.log_action("wrapped_cli_call", {"invoked_as": invoked_as, "args": args})
+        cached_response = await cache.get(prompt_content, context)
 
         if cached_response:
             print("--- (aicache HIT) ---", file=sys.stderr)
@@ -37,9 +43,9 @@ def main():
             sys.exit(0)
         else:
             print("--- (aicache MISS) ---", file=sys.stderr)
-            stdout, return_code, stderr = wrapper.execute_cli(args)
+            stdout, return_code, stderr = await wrapper.execute_cli(args)
             if return_code == 0:
-                cache.set(prompt_content, stdout, context)
+                await cache.set(prompt_content, stdout, context)
                 print(stdout)
             if stderr:
                 print(stderr, file=sys.stderr)
@@ -89,20 +95,107 @@ def main():
         create_generic_wrapper_parser.add_argument("--prompt-regex", required=True)
         create_generic_wrapper_parser.add_argument("--model-arg", default=None)
 
+        # Cache image command
+        cache_image_parser = subparsers.add_parser("cache-image")
+        cache_image_parser.add_argument("key")
+        cache_image_parser.add_argument("path")
+
+        # Get image command
+        get_image_parser = subparsers.add_parser("get-image")
+        get_image_parser.add_argument("key")
+
+        # Cache notebook command
+        cache_notebook_parser = subparsers.add_parser("cache-notebook")
+        cache_notebook_parser.add_argument("key")
+        cache_notebook_parser.add_argument("path")
+
+        # Get notebook command
+        get_notebook_parser = subparsers.add_parser("get-notebook")
+        get_notebook_parser.add_argument("key")
+
+        # Cache audio command
+        cache_audio_parser = subparsers.add_parser("cache-audio")
+        cache_audio_parser.add_argument("key")
+        cache_audio_parser.add_argument("path")
+
+        # Get audio command
+        get_audio_parser = subparsers.add_parser("get-audio")
+        get_audio_parser.add_argument("key")
+
+        # Cache video command
+        cache_video_parser = subparsers.add_parser("cache-video")
+        cache_video_parser.add_argument("key")
+        cache_video_parser.add_argument("path")
+
+        # Get video command
+        get_video_parser = subparsers.add_parser("get-video")
+        get_video_parser.add_argument("key")
+
+        # Install command
+        install_parser = subparsers.add_parser("install")
+        install_parser.add_argument("--setup-wrappers", action="store_true", help="Install CLI wrappers")
+        install_parser.add_argument("--force", action="store_true", help="Force overwrite existing wrappers")
+        install_parser.add_argument("--list", action="store_true", help="List available CLI tools")
+        install_parser.add_argument("--config", action="store_true", help="Create default config file")
+        install_parser.add_argument("tool", nargs="?", help="Specific tool to install wrapper for")
+
+        # Uninstall command  
+        uninstall_parser = subparsers.add_parser("uninstall")
+        uninstall_parser.add_argument("tool", help="Tool to remove wrapper for")
+
         args = parser.parse_args()
         cache = Cache()
+        
+        # Initialize async features if available
+        if hasattr(cache, 'init_async'):
+            await cache.init_async()
+        if hasattr(cache, 'log_action'):
+            await cache.log_action(args.command, vars(args))
+
+        # Prefetch data based on current context if available
+        if hasattr(cache, 'project_detector') and hasattr(cache, 'prefetch_data'):
+            enhanced_context = cache.project_detector.detect_context()
+            await cache.prefetch_data(enhanced_context)
 
         if args.command == "get":
-            result = cache.get(args.prompt, args.context)
+            # Parse context if it's a JSON string
+            context = args.context
+            if context and isinstance(context, str):
+                try:
+                    context = json.loads(context)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON context, using as string: {context}")
+            
+            # Handle both sync and async cache methods
+            if hasattr(cache, 'get') and asyncio.iscoroutinefunction(cache.get):
+                result = await cache.get(args.prompt, context)
+            else:
+                result = cache.get(args.prompt, context)
             if result:
                 print(json.dumps(result, indent=4))
             else:
                 print("No cache entry found.")
         elif args.command == "set":
-            cache.set(args.prompt, args.response, args.context)
+            # Parse context if it's a JSON string
+            context = args.context
+            if context and isinstance(context, str):
+                try:
+                    context = json.loads(context)
+                except json.JSONDecodeError:
+                    print(f"Warning: Invalid JSON context, using as string: {context}")
+            
+            # Handle both sync and async cache methods
+            if hasattr(cache, 'set') and asyncio.iscoroutinefunction(cache.set):
+                await cache.set(args.prompt, args.response, context)
+            else:
+                cache.set(args.prompt, args.response, context)
             print("Cache entry set.")
         elif args.command == "list":
-            entries = cache.list(verbose=args.verbose)
+            # Handle both sync and async cache methods
+            if hasattr(cache, 'list') and asyncio.iscoroutinefunction(cache.list):
+                entries = await cache.list(verbose=args.verbose)
+            else:
+                entries = cache.list(verbose=args.verbose)
             if args.verbose:
                 for entry in entries:
                     print(json.dumps(entry, indent=4))
@@ -111,7 +204,7 @@ def main():
                     print(entry)
         elif args.command == "clear":
             if args.interactive:
-                entries = cache.list(verbose=True)
+                entries = await cache.list(verbose=True)
                 if not entries:
                     print("Cache is empty.")
                     return
@@ -131,16 +224,16 @@ def main():
                             selected_indices.add(int(part) - 1)
 
                     for i in sorted(list(selected_indices), reverse=True):
-                        cache.delete(entries[i]['cache_key'])
+                        await cache.delete(entries[i]['cache_key'])
                     print("Selected cache entries deleted.")
 
                 except (ValueError, IndexError):
                     print("Invalid selection.")
             else:
-                cache.clear()
+                await cache.clear()
                 print("Cache cleared.")
         elif args.command == "inspect":
-            result = cache.inspect(args.cache_key)
+            result = await cache.inspect(args.cache_key)
             if result:
                 print(json.dumps(result, indent=4))
             else:
@@ -151,21 +244,21 @@ _aicache_completions()
 {
     local cur_word prev_word
     cur_word=\"${COMP_WORDS[COMP_CWORD]}\"
-    prev_word=\"${COMP_WORDS[COMP_CWORD-1]}\"
+    prev_word=\"${COMP_WORDS[COMP_CWORD-1]}\" # Corrected: escaped '$'
 
     case "${prev_word}" in
         aicache)
-            COMPREPLY=( $(compgen -W "get set list clear inspect generate-completions prune stats create-generic-wrapper" -- ${cur_word}) )
-            ;;
+            COMPREPLY=( $(compgen -W \"get set list clear inspect generate-completions prune stats create-generic-wrapper cache-image get-image cache-notebook get-notebook cache-audio get-audio cache-video get-video\" -- ${cur_word}) ) # Corrected: escaped '"'
+            ;; 
         list)
-            COMPREPLY=( $(compgen -W "--verbose -v" -- ${cur_word}) )
-            ;;
+            COMPREPLY=( $(compgen -W \"--verbose -v\" -- ${cur_word}) ) # Corrected: escaped '"'
+            ;; 
         clear)
-            COMPREPLY=( $(compgen -W "--interactive -i" -- ${cur_word}) )
-            ;;
+            COMPREPLY=( $(compgen -W \"--interactive -i\" -- ${cur_word}) ) # Corrected: escaped '"'
+            ;; 
         *)
             COMPREPLY=()
-            ;;
+            ;; 
     esac
 }
 
@@ -173,14 +266,18 @@ complete -F _aicache_completions aicache
 """
             print(completion_script)
         elif args.command == "prune":
-            pruned_count = cache.prune()
+            pruned_count = await cache.prune()
             print(f"Pruned {pruned_count} expired cache entries.")
         elif args.command == "stats":
-            stats = cache.stats()
+            # Handle both sync and async cache methods
+            if hasattr(cache, 'stats') and asyncio.iscoroutinefunction(cache.stats):
+                stats = await cache.stats()
+            else:
+                stats = cache.stats()
             print("Cache Statistics:")
             print(f"  Total entries: {stats['num_entries']}")
             print(f"  Total size: {stats['total_size']} bytes")
-            if stats['num_expired'] > 0:
+            if stats.get('num_expired', 0) > 0:
                 print(f"  Expired entries: {stats['num_expired']}")
         elif args.command == "create-generic-wrapper":
             # Generate the content of the generic wrapper script
@@ -200,12 +297,12 @@ from aicache.plugins.base import CLIWrapper as BaseCLIWrapper # Import BaseCLIWr
 
 class CustomCLIWrapper:
     def __init__(self):
-        self.cli_name = "{args.cli_name}"
-        self.real_cli_path = "{args.path}"
-        self.prompt_regex = r"{args.prompt_regex}"
-        self.model_arg = "{args.model_arg}" if "{args.model_arg}" != "None" else None
+        self.cli_name = \"{args.cli_name}\" # Corrected: escaped '"'
+        self.real_cli_path = \"{args.path}\" # Corrected: escaped '"'
+        self.prompt_regex = r\"{args.prompt_regex}\" # Corrected: escaped '"'
+        self.model_arg = \"{args.model_arg}\" if \"{args.model_arg}\" != \"None\" else None # Corrected: escaped '"'
 
-    def get_cli_name(self) -> str:
+    def get_cli_name() -> str:
         return self.cli_name
 
     def parse_arguments(self, args: list) -> tuple[str, dict]:
@@ -234,23 +331,24 @@ class CustomCLIWrapper:
         context = {{'model': model}}
         return prompt_content, context
 
-    def execute_cli(self, args: list) -> tuple[str, int, str]:
+    async def execute_cli(self, args: list) -> tuple[str, int, str]:
         if not shutil.which(self.real_cli_path):
             return "", 1, f"Error: {{self.real_cli_path}} executable not found."
 
         # Use the _run_cli_command from the BaseCLIWrapper
         base_wrapper_instance = BaseCLIWrapper()
-        return base_wrapper_instance._run_cli_command(self.real_cli_path, args)
+        return await base_wrapper_instance._run_cli_command(self.real_cli_path, args)
 
 # Main execution logic for the generated wrapper
-def generated_wrapper_main(): # Renamed to avoid conflict with main()
+async def generated_wrapper_main(): # Renamed to avoid conflict with main()
     wrapper = CustomCLIWrapper()
     args = sys.argv[1:]
 
     prompt_content, context = wrapper.parse_arguments(args)
 
     cache = Cache()
-    cached_response = cache.get(prompt_content, context)
+    await cache.init_async()
+    cached_response = await cache.get(prompt_content, context)
 
     if cached_response:
         print("--- (aicache HIT) ---", file=sys.stderr)
@@ -258,16 +356,16 @@ def generated_wrapper_main(): # Renamed to avoid conflict with main()
         sys.exit(0)
     else:
         print("--- (aicache MISS) ---", file=sys.stderr)
-        stdout, return_code, stderr = wrapper.execute_cli(args)
+        stdout, return_code, stderr = await wrapper.execute_cli(args)
         if return_code == 0:
-            cache.set(prompt_content, stdout, context)
+            await cache.set(prompt_content, stdout, context)
             print(stdout)
         if stderr:
             print(stderr, file=sys.stderr)
         sys.exit(return_code)
 
 if __name__ == "__main__":
-    generated_wrapper_main() # Call the renamed main function
+    asyncio.run(generated_wrapper_main()) # Call the renamed main function
 """
             # Write the wrapper content to a file
             output_dir = Path.cwd() / "custom_wrappers"
@@ -282,8 +380,104 @@ if __name__ == "__main__":
             print(f"Generic wrapper for '{args.cli_name}' created at: {output_file}")
             print(f"To use it, add '{output_dir}' to your PATH before the real CLI's path, or create a symlink:")
             print(f"ln -s {output_file} ~/.local/bin/{args.cli_name}")
+        elif args.command == "cache-image":
+            await cache.set_image(args.key, args.path)
+            print(f"Image cached with key: {args.key}")
+        elif args.command == "get-image":
+            image_path = await cache.get_image(args.key)
+            if image_path:
+                print(f"Image path: {image_path}")
+            else:
+                print("No image found for this key.")
+        elif args.command == "cache-notebook":
+            await cache.set_notebook(args.key, args.path)
+            print(f"Notebook cached with key: {args.key}")
+        elif args.command == "get-notebook":
+            notebook_path = await cache.get_notebook(args.key)
+            if notebook_path:
+                print(f"Notebook path: {notebook_path}")
+            else:
+                print("No notebook found for this key.")
+        elif args.command == "cache-audio":
+            await cache.set_audio(args.key, args.path)
+            print(f"Audio file cached with key: {args.key}")
+        elif args.command == "get-audio":
+            audio_path = await cache.get_audio(args.key)
+            if audio_path:
+                print(f"Audio path: {audio_path}")
+            else:
+                print("No audio file found for this key.")
+        elif args.command == "cache-video":
+            await cache.set_video(args.key, args.path)
+            print(f"Video file cached with key: {args.key}")
+        elif args.command == "get-video":
+            video_path = await cache.get_video(args.key)
+            if video_path:
+                print(f"Video path: {video_path}")
+            else:
+                print("No video file found for this key.")
+        elif args.command == "install":
+            from .installer import AICacheInstaller
+            installer = AICacheInstaller()
+            
+            if args.list:
+                # List available CLI tools
+                wrappers = installer.list_wrappers()
+                print("Available CLI Tools:")
+                print("-" * 50)
+                for wrapper in wrappers:
+                    print(f"{wrapper['name']:12} | {wrapper['status']} | {wrapper['description']}")
+                
+                # Check PATH setup
+                path_info = installer.check_path_setup()
+                if not path_info['in_path']:
+                    print(f"\n⚠️  {path_info['local_bin_path']} is not in your PATH")
+                    print("Setup instructions:")
+                    for instruction in path_info['setup_instructions']:
+                        print(f"  {instruction}")
+                        
+            elif args.config:
+                # Create config file
+                config_path = installer.create_config_file()
+                print(f"✅ Created config file at {config_path}")
+                
+            elif args.setup_wrappers:
+                # Install all available wrappers
+                results = installer.install_all_available(force=args.force)
+                installed = [k for k, v in results.items() if v]
+                skipped = [k for k, v in results.items() if not v]
+                
+                if installed:
+                    print(f"✅ Installed wrappers: {', '.join(installed)}")
+                if skipped:
+                    print(f"⏭️  Skipped: {', '.join(skipped)}")
+                    
+                # Check PATH
+                path_info = installer.check_path_setup()
+                if not path_info['in_path']:
+                    print(f"\n⚠️  Don't forget to add {path_info['local_bin_path']} to your PATH!")
+                    
+            elif args.tool:
+                # Install specific tool wrapper
+                success = installer.install_wrapper(args.tool, force=args.force)
+                if success:
+                    print(f"✅ Installed {args.tool} wrapper")
+                else:
+                    print(f"❌ Failed to install {args.tool} wrapper")
+            else:
+                install_parser.print_help()
+                
+        elif args.command == "uninstall":
+            from .installer import AICacheInstaller
+            installer = AICacheInstaller()
+            
+            success = installer.uninstall_wrapper(args.tool)
+            if success:
+                print(f"✅ Removed {args.tool} wrapper")
+            else:
+                print(f"❌ Failed to remove {args.tool} wrapper")
         else:
             parser.print_help()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
