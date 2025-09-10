@@ -1,0 +1,59 @@
+service: aicache-serverless
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  memorySize: 128
+  timeout: 30
+  environment:
+    STAGE: ${opt:stage, 'dev'}
+    LOG_LEVEL: INFO
+
+functions:
+  queryCache:
+    handler: src/main.query_cache
+    events:
+      - http:
+          path: /cache/query
+          method: post
+          cors: true
+    environment:
+      CACHE_TABLE: ${self:service}-${opt:stage, 'dev'}-cache
+
+  storeCache:
+    handler: src/main.store_cache
+    events:
+      - http:
+          path: /cache/store
+          method: post
+          cors: true
+
+  healthCheck:
+    handler: src/main.health_check
+    events:
+      - http:
+          path: /health
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    CacheTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${opt:stage, 'dev'}-cache
+        AttributeDefinitions:
+          - AttributeName: cacheKey
+            AttributeType: S
+        KeySchema:
+          - AttributeName: cacheKey
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux

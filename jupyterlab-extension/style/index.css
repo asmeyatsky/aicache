@@ -1,0 +1,39 @@
+/*
+ * Base styles for aicache JupyterLab extension
+ */
+
+.aicache-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.aicache-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--jp-border-color2);
+}
+
+.aicache-content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+}
+
+.aicache-status {
+  padding: 4px 8px;
+  font-size: var(--jp-ui-font-size0);
+  color: var(--jp-ui-font-color1);
+}
+
+.aicache-button {
+  background-color: var(--jp-brand-color1);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.aicache-button:hover {
+  background-color: var(--jp-brand-color2);
+}

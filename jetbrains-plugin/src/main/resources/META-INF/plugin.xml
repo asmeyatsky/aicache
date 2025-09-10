@@ -1,0 +1,44 @@
+<idea-plugin>
+    <id>com.aicache.plugin</id>
+    <name>aicache</name>
+    <vendor email="support@aicache.dev" url="https://aicache.dev">aicache</vendor>
+
+    <description><![CDATA[
+        AI CLI Session Caching for JetBrains IDEs.<br>
+        <em>Intelligent caching for developer productivity</em>
+    ]]></description>
+
+    <change-notes><![CDATA[
+        Initial release of aicache plugin.
+    ]]></change-notes>
+
+    <!-- Product and plugin compatibility requirements -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Services -->
+        <applicationService serviceImplementation="com.aicache.plugin.services.AicacheService"/>
+        
+        <!-- Tool Windows -->
+        <toolWindow id="aicache" secondary="true" anchor="right" 
+                    factoryClass="com.aicache.plugin.ui.AicacheToolWindowFactory"/>
+        
+        <!-- Documentation Provider -->
+        <documentationProvider implementation="com.aicache.plugin.ui.AicacheDocumentationProvider"/>
+    </extensions>
+
+    <actions>
+        <!-- Actions -->
+        <action id="Aicache.QueryCache" class="com.aicache.plugin.actions.QueryCacheAction" 
+                text="Query aicache" description="Query the aicache service">
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl shift A"/>
+        </action>
+        
+        <action id="Aicache.RefreshCache" class="com.aicache.plugin.actions.RefreshCacheAction" 
+                text="Refresh Cache" description="Refresh the aicache">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>

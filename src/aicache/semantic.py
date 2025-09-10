@@ -44,6 +44,14 @@ except (ImportError, Exception):
 
 try:
     import nltk
+    import ssl
+    # Fix SSL certificate issue for NLTK downloads
+    try:
+        _create_unverified_https_context = ssl._create_unverified_context
+    except AttributeError:
+        pass
+    else:
+        ssl._create_default_https_context = _create_unverified_https_context
     from nltk.corpus import wordnet
     NLTK_AVAILABLE = True
 except (ImportError, Exception):

@@ -1,0 +1,24 @@
+{
+  "name": "aicache-github-app",
+  "version": "0.1.0",
+  "description": "GitHub App for aicache integration",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "axios": "^0.27.0",
+    "dotenv": "^16.0.0",
+    "jsonwebtoken": "^8.5.1",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "jest": "^28.0.0",
+    "nodemon": "^2.0.15",
+    "supertest": "^6.2.0"
+  }
+}

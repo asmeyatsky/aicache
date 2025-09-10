@@ -1,0 +1,25 @@
+# Default configuration for aicache container caching service
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+
+storage:
+  image_path: "/var/cache/aicache/images"
+  manifest_path: "/var/cache/aicache/manifests"
+
+registries:
+  "registry-1.docker.io":
+    username: ""
+    password: ""
+  "gcr.io":
+    username: ""
+    password: ""
+  "public.ecr.aws":
+    username: ""
+    password: ""
+
+logging:
+  level: "INFO"
+  format: "json"

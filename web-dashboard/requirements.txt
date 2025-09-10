@@ -1,0 +1,16 @@
+fastapi==0.85.0
+uvicorn==0.18.0
+sqlalchemy==1.4.0
+aiosqlite==0.17.0
+psycopg2==2.9.0
+redis==4.3.0
+python-socketio==5.7.0
+python-jose==3.3.0
+passlib==1.7.0
+bcrypt==4.0.0
+pydantic==1.10.0
+celery==5.2.0
+requests==2.28.0
+pandas==1.5.0
+numpy==1.23.0
+matplotlib==3.5.0

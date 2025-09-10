@@ -296,7 +296,7 @@ class BehavioralAnalyzer:
             else:
                 # Create new pattern
                 await conn.execute('''
-                    INSERT INTO learned_patterns 
+                    INSERT OR REPLACE INTO learned_patterns 
                     (pattern_hash, sequence, frequency, last_seen, context_features, success_rate, next_queries)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                 ''', (pattern_hash, json.dumps(sequence), 1, current_time,

@@ -1,0 +1,108 @@
+html {
+	box-sizing: border-box;
+	font-size: 13px;
+}
+
+*,
+*:before,
+*:after {
+	box-sizing: inherit;
+}
+
+body {
+	margin: 0;
+	padding: 0;
+	font-family: var(--vscode-font-family);
+	color: var(--vscode-foreground);
+	background-color: var(--vscode-editor-background);
+}
+
+a {
+	color: var(--vscode-textLink-foreground);
+}
+
+a:hover,
+a:active {
+	color: var(--vscode-textLink-activeForeground);
+}
+
+button {
+	border: none;
+	padding: 8px 12px;
+	background-color: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	cursor: pointer;
+}
+
+button:hover {
+	background-color: var(--vscode-button-hoverBackground);
+}
+
+input,
+textarea {
+	background-color: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border);
+	color: var(--vscode-input-foreground);
+	padding: 4px 8px;
+}
+
+input:focus,
+textarea:focus {
+	outline-color: var(--vscode-focusBorder);
+}
+
+.container {
+	padding: 16px;
+}
+
+h1 {
+	font-size: 1.5em;
+	font-weight: 600;
+	margin-bottom: 16px;
+}
+
+.entry-item {
+	border-bottom: 1px solid var(--vscode-panel-border);
+	padding: 8px 0;
+}
+
+.entry-item:last-child {
+	border-bottom: none;
+}
+
+.entry-title {
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.entry-meta {
+	font-size: 0.9em;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 4px;
+}
+
+.entry-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.tag {
+	background-color: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	padding: 2px 6px;
+	border-radius: 2px;
+	font-size: 0.8em;
+}
+
+.status-online {
+	color: var(--vscode-charts-green);
+}
+
+.status-away {
+	color: var(--vscode-charts-yellow);
+}
+
+.status-offline {
+	color: var(--vscode-charts-red);
+}

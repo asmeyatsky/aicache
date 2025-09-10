@@ -1,0 +1,48 @@
+#members-container {
+	max-height: calc(100vh - 150px);
+	overflow-y: auto;
+}
+
+.member-item {
+	padding: 12px;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	margin-bottom: 8px;
+	background-color: var(--vscode-sideBar-background);
+	display: flex;
+	align-items: center;
+}
+
+.member-status {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	margin-right: 12px;
+	flex-shrink: 0;
+}
+
+.member-status.online {
+	background-color: var(--vscode-charts-green);
+}
+
+.member-status.away {
+	background-color: var(--vscode-charts-yellow);
+}
+
+.member-status.offline {
+	background-color: var(--vscode-charts-red);
+}
+
+.member-info {
+	flex-grow: 1;
+}
+
+.member-name {
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.member-task {
+	font-size: 0.9em;
+	color: var(--vscode-descriptionForeground);
+}
