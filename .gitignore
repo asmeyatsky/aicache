@@ -21,3 +21,6 @@ dist/
 # Test artifacts
 .pytest_cache/
 test_project/
+
+# Deployment instructions
+deployment.md

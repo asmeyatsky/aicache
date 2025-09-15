@@ -43,3 +43,26 @@ class CLIWrapper(ABC):
             return process.stdout.decode('utf-8'), process.returncode, process.stderr.decode('utf-8')
         except FileNotFoundError:
             return "", 1, f"Error: {real_cli_path} executable not found."
+
+    async def _run_cli_command_async(self, real_cli_path: str, args: list, input_data: str = None) -> tuple[str, int, str]:
+        """Async helper method to run a CLI command."""
+        import asyncio
+        try:
+            if input_data:
+                process = await asyncio.create_subprocess_exec(
+                    real_cli_path, *args,
+                    stdin=asyncio.subprocess.PIPE,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate(input=input_data.encode('utf-8'))
+            else:
+                process = await asyncio.create_subprocess_exec(
+                    real_cli_path, *args,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+            return stdout.decode('utf-8'), process.returncode, stderr.decode('utf-8')
+        except FileNotFoundError:
+            return "", 1, f"Error: {real_cli_path} executable not found."

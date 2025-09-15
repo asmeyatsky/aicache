@@ -2,16 +2,17 @@
 
 AI CLI Session Caching.
 
-This project is a caching system for AI CLIs (Gemini, Claude, and OpenAI) to improve developer workflow efficiency.
+This project is a caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) to improve developer workflow efficiency.
 
 ## Features
 
-- Automatic session caching for `gcloud`, `llm`, and `openai` CLIs.
+- Automatic session caching for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` CLIs.
 - Intelligent argument parsing to create accurate cache keys.
 - Persistence of cache across sessions.
 - A rich set of commands to manage the cache (`list`, `inspect`, `clear`).
 - Interactive cache clearing.
 - Shell completions for `bash`.
+- Custom wrapper support for additional AI CLI tools.
 
 ## Getting Started
 
@@ -27,7 +28,7 @@ This project is a caching system for AI CLIs (Gemini, Claude, and OpenAI) to imp
     ```bash
     make setup
     ```
-    This will install the `aicache` package in a virtual environment and create symbolic links for `gcloud`, `llm`, and `openai` in `~/.local/bin` that point to the `aicache` executable.
+    This will install the `aicache` package in a virtual environment and create wrapper scripts for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` in `~/.local/bin`.
 
 3.  **Update your shell's configuration:**
     Make sure `~/.local/bin` is in your `$PATH` and has precedence over the default paths. Add the following line to your `~/.bashrc`, `~/.zshrc`, or other shell configuration file:
@@ -38,7 +39,7 @@ This project is a caching system for AI CLIs (Gemini, Claude, and OpenAI) to imp
 
 ### Usage
 
-Once installed, the `aicache` wrappers for `gcloud`, `llm`, and `openai` will work automatically. When you run a command with `gcloud`, `llm`, or `openai`, the wrapper will cache the response. The next time you run the same command, the response will be served from the cache.
+Once installed, the `aicache` wrappers for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` will work automatically. When you run a command with any of these AI CLIs, the wrapper will cache the response. The next time you run the same command, the response will be served from the cache.
 
 ### CLI Commands
 
