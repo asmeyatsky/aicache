@@ -129,6 +129,47 @@ class CacheMetrics:
         """Calculate semantic hit rate."""
         return self.semantic_hits / self.cache_hits if self.cache_hits > 0 else 0.0
 
+
+class DataSanitizer:
+    """Sanitizes sensitive data before caching."""
+    
+    @staticmethod
+    def sanitize_prompt(prompt: str, config: Dict[str, Any]) -> str:
+        """Sanitize prompt to remove sensitive information if required."""
+        if not config.get('security', {}).get('pii_detection', True):
+            return prompt
+            
+        # Basic PII detection and sanitization
+        import re
+        
+        # Sanitize email addresses
+        prompt = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', prompt)
+        
+        # Sanitize IP addresses
+        prompt = re.sub(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', '[IP_ADDRESS]', prompt)
+        
+        # Sanitize phone numbers (basic pattern)
+        prompt = re.sub(r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE]', prompt)
+        
+        return prompt
+    
+    @staticmethod
+    def sanitize_context(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize context to remove sensitive information if required."""
+        if not config.get('security', {}).get('encrypt_sensitive', True):
+            return context
+            
+        sanitized_context = context.copy()
+        
+        # Remove potentially sensitive keys
+        sensitive_keys = ['api_key', 'token', 'password', 'secret', 'auth', 'authorization', 'bearer']
+        for key in list(sanitized_context.keys()):
+            if any(sensitive in key.lower() for sensitive in sensitive_keys):
+                sanitized_context[key] = '[REDACTED]'
+        
+        return sanitized_context
+
+
 class ProjectDetector:
     """Detects project context from file system."""
     
@@ -271,8 +312,8 @@ class IntelligentCacheManager:
 class EnhancedCache:
     """Enhanced cache with semantic search and intelligent management."""
     
-    def __init__(self, cache_name: str = "default"):
-        self.config = get_config()
+    def __init__(self, cache_name: str = "default", config_override: Dict[str, Any] = None):
+        self.config = config_override if config_override else get_config()
         self.cache_name = cache_name
         
         # Initialize cache directory
@@ -290,11 +331,12 @@ class EnhancedCache:
         # Initialize database
         self.db_path = self.cache_dir / "cache.db"
         
-        # Initialize semantic cache (disabled for now due to dependency issues)
+        # Initialize semantic cache with better error handling
         semantic_config = self.config.get('semantic_cache', {})
-        if False and SEMANTIC_AVAILABLE and semantic_config.get('enabled', True):
+        if SEMANTIC_AVAILABLE and semantic_config.get('enabled', True):
             try:
                 self.semantic_cache = SemanticCache(semantic_config)
+                logger.info("Semantic cache initialized successfully")
             except Exception as e:
                 logger.warning(f"Failed to initialize semantic cache: {e}")
                 self.semantic_cache = None
@@ -334,32 +376,44 @@ class EnhancedCache:
         logger.info(f"Enhanced cache initialized at {self.cache_dir}")
 
     async def init_async(self):
-        await self._init_database()
-        await self._load_metrics()
-        
-        # Initialize behavioral system
-        if self.behavioral_analyzer:
-            await self.behavioral_analyzer.init_db()
-            self.predictive_prefetcher = PredictivePrefetcher(self, self.behavioral_analyzer)
-            self.contextual_learner = ContextualLearner(self.behavioral_analyzer)
+        try:
+            await self._init_database()
+            await self._load_metrics()
             
-            # Initialize proactive code generator - always available now with fallback
-            if ProactiveCodeGenerator:
-                # Create LLM service if available
-                if LLM_SERVICE_AVAILABLE:
-                    self.llm_service = LLMService(self.config.get('llm_service', {}))
-                else:
-                    self.llm_service = None
-                self.proactive_generator = ProactiveCodeGenerator(self.llm_service, self.behavioral_analyzer)
-                await self.proactive_generator.start()
-            
-            # Start predictive prefetching
-            await self.predictive_prefetcher.start()
-            
-            # Run contextual learning analysis
-            await self.contextual_learner.analyze_context_patterns()
-            
-            logger.info("Behavioral learning system initialized and started")
+            # Initialize behavioral system with enhanced error handling
+            if self.behavioral_analyzer:
+                try:
+                    await self.behavioral_analyzer.init_db()
+                    self.predictive_prefetcher = PredictivePrefetcher(self, self.behavioral_analyzer)
+                    self.contextual_learner = ContextualLearner(self.behavioral_analyzer)
+                    
+                    # Initialize proactive code generator with fallback
+                    if ProactiveCodeGenerator:
+                        # Create LLM service if available
+                        if LLM_SERVICE_AVAILABLE:
+                            try:
+                                self.llm_service = LLMService(self.config.get('llm_service', {}))
+                            except Exception as e:
+                                logger.warning(f"Failed to initialize LLM service: {e}")
+                                self.llm_service = None
+                        else:
+                            self.llm_service = None
+                        self.proactive_generator = ProactiveCodeGenerator(self.llm_service, self.behavioral_analyzer)
+                        await self.proactive_generator.start()
+                    
+                    # Start predictive prefetching
+                    await self.predictive_prefetcher.start()
+                    
+                    # Run contextual learning analysis
+                    await self.contextual_learner.analyze_context_patterns()
+                    
+                    logger.info("Behavioral learning system initialized and started")
+                except Exception as e:
+                    logger.error(f"Failed to initialize behavioral learning system: {e}")
+                    # Still continue with basic functionality
+        except Exception as e:
+            logger.error(f"Critical error during enhanced cache initialization: {e}")
+            raise
         
         # Generate session ID
         import uuid
@@ -383,6 +437,14 @@ class EnhancedCache:
                     cost_estimate REAL DEFAULT 1.0,
                     priority_score REAL DEFAULT 0.0
                 )
+            ''')
+            
+            # Create additional indexes for better performance
+            await conn.execute('''
+                CREATE INDEX IF NOT EXISTS idx_timestamp_accessed ON cache_entries(timestamp, last_accessed)
+            ''')
+            await conn.execute('''
+                CREATE INDEX IF NOT EXISTS idx_access_count ON cache_entries(access_count DESC)
             ''')
 
             await conn.execute('''
@@ -462,23 +524,45 @@ class EnhancedCache:
     
     @asynccontextmanager
     async def _get_db_connection(self):
-        """Get database connection with proper locking."""
+        """Get database connection with proper locking and error handling."""
         conn = await aiosqlite.connect(self.db_path)
         conn.row_factory = aiosqlite.Row
         try:
+            # Set timeout to handle potential locking issues
+            await conn.execute("PRAGMA busy_timeout = 30000")  # 30 second timeout
             yield conn
+        except Exception as e:
+            logger.error(f"Database connection error: {e}")
+            await conn.rollback()
+            raise
         finally:
             await conn.close()
     
     def _serialize_data(self, data: Any) -> bytes:
-        """Serialize data using MessagePack and compress it."""
-        packed = msgpack.packb(data, use_bin_type=True)
-        return zlib.compress(packed)
+        """Serialize data using MessagePack and compress it with optimal settings."""
+        try:
+            packed = msgpack.packb(data, use_bin_type=True)
+            # Use compression level 6 for good balance of speed and compression
+            compressed = zlib.compress(packed, level=6)
+            return compressed
+        except Exception as e:
+            logger.error(f"Serialization error: {e}")
+            # Fallback to uncompressed data if serialization fails
+            return msgpack.packb(data, use_bin_type=True)
 
     def _deserialize_data(self, data: bytes) -> Any:
-        """Decompress and deserialize data."""
-        unpacked = zlib.decompress(data)
-        return msgpack.unpackb(unpacked, raw=False)
+        """Decompress and deserialize data with error handling."""
+        try:
+            # Try to decompress first
+            try:
+                unpacked = zlib.decompress(data)
+            except zlib.error:
+                # If decompression fails, treat as uncompressed data
+                unpacked = data
+            return msgpack.unpackb(unpacked, raw=False)
+        except Exception as e:
+            logger.error(f"Deserialization error: {e}")
+            return None
 
     def _get_cache_key(self, prompt: str, context: Union[Dict[str, Any], AdvancedContext] = None) -> str:
         """Generate cache key from prompt and context."""
@@ -576,13 +660,16 @@ class EnhancedCache:
     
     async def get(self, prompt: str, context: Union[Dict[str, Any], AdvancedContext] = None) -> Optional[Dict[str, Any]]:
         """Get cache entry with semantic search fallback and behavioral analysis."""
-        enhanced_context = self._enhance_context(context if isinstance(context, dict) else (context.to_dict() if context else None))
+        # Sanitize input data
+        sanitized_prompt = DataSanitizer.sanitize_prompt(prompt, self.config)
+        sanitized_context = DataSanitizer.sanitize_context(context if isinstance(context, dict) else (context.to_dict() if context else None) or {}, self.config)
+        enhanced_context = self._enhance_context(sanitized_context)
         
         # Update metrics
         self.metrics.total_requests += 1
         
         # First, try exact match
-        cache_key = self._get_cache_key(prompt, enhanced_context)
+        cache_key = self._get_cache_key(sanitized_prompt, enhanced_context)
         cache_hit = False
         result = None
         
@@ -701,56 +788,70 @@ class EnhancedCache:
     
     async def set(self, prompt: str, response: str, context: Union[Dict[str, Any], AdvancedContext] = None, 
             cost_estimate: float = 1.0) -> str:
-        """Set cache entry with enhanced metadata."""
-        enhanced_context = self._enhance_context(context if isinstance(context, dict) else (context.to_dict() if context else None))
-        
-        cache_key = self._get_cache_key(prompt, enhanced_context)
-        
-        # Serialize and compress data
-        serialized_response = self._serialize_data(response)
-        serialized_context = self._serialize_data(enhanced_context.to_dict())
-        
-        # Calculate priority score
-        priority_score = self.cache_manager.calculate_priority(cache_key, {'timestamp': time.time()})
-        
-        current_time = time.time()
-        
-        async with self._get_db_connection() as conn:
-            await conn.execute('''
-                INSERT OR REPLACE INTO cache_entries 
-                (cache_key, prompt, response, context, timestamp, last_accessed, 
-                 response_size, compression_ratio, cost_estimate, priority_score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                cache_key,
-                prompt,
-                serialized_response,
-                serialized_context,
-                current_time,
-                current_time,
-                len(response.encode('utf-8')),
-                len(serialized_response) / len(msgpack.packb(response, use_bin_type=True)),
-                cost_estimate,
-                priority_score
-            ))
-            await conn.commit()
-        
-        # Add to semantic cache
-        if self.semantic_cache and self.semantic_cache.enabled:
-            await self.semantic_cache.add(prompt, response, enhanced_context.to_dict())
-        
-        # Link intent to cache if intent analysis was performed
-        if self.intent_cache:
-            # Analyze intent for this entry
-            intent_entry = await self.intent_cache.intent_analyzer.analyze_intent(prompt, enhanced_context.to_dict())
-            if intent_entry:
-                await self.intent_cache.link_intent_to_cache(intent_entry.intent_hash, cache_key)
-        
-        # Update cache manager
-        self.cache_manager.set_cost_estimate(cache_key, cost_estimate)
-        
-        logger.info(f"Cached entry {cache_key[:8]}...")
-        return cache_key
+        """Set cache entry with enhanced metadata and error handling."""
+        try:
+            # Sanitize input data
+            sanitized_prompt = DataSanitizer.sanitize_prompt(prompt, self.config)
+            sanitized_context = DataSanitizer.sanitize_context(context if isinstance(context, dict) else (context.to_dict() if context else None) or {}, self.config)
+            enhanced_context = self._enhance_context(sanitized_context)
+            
+            cache_key = self._get_cache_key(sanitized_prompt, enhanced_context)
+            
+            # Serialize and compress data
+            serialized_response = self._serialize_data(response)
+            serialized_context = self._serialize_data(enhanced_context.to_dict())
+            
+            # Calculate priority score
+            priority_score = self.cache_manager.calculate_priority(cache_key, {'timestamp': time.time()})
+            
+            current_time = time.time()
+            
+            async with self._get_db_connection() as conn:
+                await conn.execute('''
+                    INSERT OR REPLACE INTO cache_entries 
+                    (cache_key, prompt, response, context, timestamp, last_accessed, 
+                     response_size, compression_ratio, cost_estimate, priority_score)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    cache_key,
+                    sanitized_prompt,
+                    serialized_response,
+                    serialized_context,
+                    current_time,
+                    current_time,
+                    len(response.encode('utf-8')),
+                    len(serialized_response) / len(msgpack.packb(response, use_bin_type=True)) if serialized_response else 1.0,
+                    cost_estimate,
+                    priority_score
+                ))
+                await conn.commit()
+            
+            # Add to semantic cache with error handling
+            if self.semantic_cache and self.semantic_cache.enabled:
+                try:
+                    await self.semantic_cache.add(sanitized_prompt, response, enhanced_context.to_dict())
+                except Exception as e:
+                    logger.warning(f"Failed to add to semantic cache: {e}")
+            
+            # Link intent to cache if intent analysis was performed
+            if self.intent_cache:
+                try:
+                    # Analyze intent for this entry
+                    intent_entry = await self.intent_cache.intent_analyzer.analyze_intent(sanitized_prompt, enhanced_context.to_dict())
+                    if intent_entry:
+                        await self.intent_cache.link_intent_to_cache(intent_entry.intent_hash, cache_key)
+                except Exception as e:
+                    logger.warning(f"Failed to link intent to cache: {e}")
+            
+            # Update cache manager
+            self.cache_manager.set_cost_estimate(cache_key, cost_estimate)
+            
+            logger.info(f"Cached entry {cache_key[:8]}...")
+            return cache_key
+        except Exception as e:
+            logger.error(f"Error in set operation: {e}")
+            # Return a dummy key or raise error depending on requirements
+            raise e
 
     async def set_image(self, cache_key: str, image_path: str):
         """Caches an image."""
@@ -1040,6 +1141,44 @@ class EnhancedCache:
         }
         
         return stats
+
+    def stats(self) -> Dict[str, Any]:
+        """Synchronous stats method for backward compatibility."""
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            # No event loop running, create a new one for this call
+            enhanced_stats = asyncio.run(self.get_stats())
+        else:
+            # Event loop is running, use asyncio.run() in a new thread
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, self.get_stats())
+                enhanced_stats = future.result()
+        
+        # Format the stats to match the original Cache.stats() method for backward compatibility
+        storage_stats = enhanced_stats.get('storage', {})
+        return {
+            'num_entries': storage_stats.get('total_entries', 0),
+            'total_size': storage_stats.get('total_size', 0),
+            'num_expired': storage_stats.get('expired_entries', 0)
+        }
+
+    async def shutdown(self):
+        """Properly shut down all async resources."""
+        try:
+            # Stop predictive prefetcher if running
+            if hasattr(self, 'predictive_prefetcher') and self.predictive_prefetcher:
+                await self.predictive_prefetcher.stop()
+            
+            # Save metrics
+            await self._save_metrics()
+            
+            logger.info("Enhanced cache shutdown completed")
+        except Exception as e:
+            logger.error(f"Error during enhanced cache shutdown: {e}")
+
 
 # Backward compatibility
 Cache = EnhancedCache

@@ -93,21 +93,49 @@ class Cache:
             return True
         return False
 
-    def prune(self, max_age_days=30):
-        """Removes cache entries older than a certain number of days."""
+    def prune(self, max_age_days=None, max_size_mb=None):
+        """Removes cache entries based on the configured or passed eviction policy."""
+        # Import here to avoid circular import issues
+        from .config import get_config
+        config = get_config()
+        
+        # Use passed parameters or fall back to config values
+        if max_age_days is None:
+            max_age_days = config.get("intelligent_management.max_age_days")
+        if max_size_mb is None:
+            max_size_mb = config.get("intelligent_management.max_size_mb")
+
         pruned_count = 0
-        for f in self.cache_dir.iterdir():
-            if not f.is_file():
-                continue
-            try:
-                with open(f, 'r') as cache_file:
-                    data = json.load(cache_file)
-                    timestamp = data.get("timestamp")
-                    if timestamp and (time.time() - timestamp) > (max_age_days * 86400):
-                        f.unlink()
-                        pruned_count += 1
-            except (json.JSONDecodeError, FileNotFoundError):
-                continue
+        if max_age_days is not None and max_age_days > 0:
+            for f in self.cache_dir.iterdir():
+                if not f.is_file():
+                    continue
+                try:
+                    with open(f, 'r') as cache_file:
+                        data = json.load(cache_file)
+                        timestamp = data.get("timestamp")
+                        if timestamp and (time.time() - timestamp) > (max_age_days * 86400):
+                            f.unlink()
+                            pruned_count += 1
+                except (json.JSONDecodeError, FileNotFoundError):
+                    continue
+
+        if max_size_mb is not None and max_size_mb > 0:
+            print(f"Max size (MB): {max_size_mb}")
+            total_size = self.stats()['total_size']
+            print(f"Total size: {total_size}")
+            if total_size > max_size_mb * 1024 * 1024:
+                # Get all cache files and sort them by timestamp (oldest first)
+                files = sorted(self.cache_dir.iterdir(), key=lambda f: f.stat().st_mtime)
+                while total_size > max_size_mb * 1024 * 1024:
+                    if not files:
+                        break
+                    file_to_delete = files.pop(0)
+                    total_size -= file_to_delete.stat().st_size
+                    file_to_delete.unlink()
+                    pruned_count += 1
+                    print(f"Deleted {file_to_delete}")
+
         return pruned_count
 
     def stats(self):

@@ -2,18 +2,16 @@ import argparse
 import json
 import sys
 import os
-import asyncio
 from pathlib import Path
 import shutil # Added for create-generic-wrapper
 import re # Added for create-generic-wrapper
+import time
+import asyncio
 
-try:
-    from .enhanced_core import EnhancedCache as Cache
-except ImportError:
-    from .core import Cache
+from .core import Cache
 from .plugins import REGISTERED_PLUGINS
 
-async def main():
+def main():
     invoked_as = os.path.basename(sys.argv[0])
 
     if invoked_as in REGISTERED_PLUGINS:
@@ -25,17 +23,17 @@ async def main():
 
         if not prompt_content:
             # If no prompt content found, just execute the command without caching
-            stdout, return_code, stderr = await wrapper.execute_cli(args)
+            stdout, return_code, stderr = wrapper.execute_cli(args)
             if stdout:
                 print(stdout)
             if stderr:
                 print(stderr, file=sys.stderr)
             sys.exit(return_code)
 
+        # Use basic cache for wrapped CLIs to avoid async issues
         cache = Cache()
-        await cache.init_async()
-        await cache.log_action("wrapped_cli_call", {"invoked_as": invoked_as, "args": args})
-        cached_response = await cache.get(prompt_content, context)
+
+        cached_response = cache.get(prompt_content, context)
 
         if cached_response:
             print("--- (aicache HIT) ---", file=sys.stderr)
@@ -43,9 +41,9 @@ async def main():
             sys.exit(0)
         else:
             print("--- (aicache MISS) ---", file=sys.stderr)
-            stdout, return_code, stderr = await wrapper.execute_cli(args)
+            stdout, return_code, stderr = wrapper.execute_cli(args)
             if return_code == 0:
-                await cache.set(prompt_content, stdout, context)
+                cache.set(prompt_content, stdout, context)
                 print(stdout)
             if stderr:
                 print(stderr, file=sys.stderr)
@@ -163,20 +161,31 @@ async def main():
         prefetch_parser.add_argument("--priority", type=int, choices=[1,2,3], default=2, help="Prefetch priority")
 
         args = parser.parse_args()
-        cache = Cache()
         
-        # Initialize async features if available
-        if hasattr(cache, 'init_async'):
-            await cache.init_async()
-        if hasattr(cache, 'log_action'):
-            await cache.log_action(args.command, vars(args))
+        cache = Cache()  # Use basic cache for general CLI commands to avoid initialization overhead
 
-        # Prefetch data based on current context if available
-        if hasattr(cache, 'project_detector') and hasattr(cache, 'prefetch_data'):
-            enhanced_context = cache.project_detector.detect_context()
-            await cache.prefetch_data(enhanced_context)
-
+        # For advanced commands that require EnhancedCache features, initialize it
+        advanced_commands = {"analytics", "predict", "prefetch"}
+        if args.command in advanced_commands:
+            try:
+                from .enhanced_core import EnhancedCache
+                cache = EnhancedCache()
+                # Initialize the async components - handle possible running event loop
+                try:
+                    import asyncio
+                    asyncio.run(cache.init_async())
+                except RuntimeError:
+                    # Event loop is already running, try to handle gracefully
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(lambda: asyncio.run(cache.init_async()))
+                        future.result()
+            except ImportError:
+                cache = Cache()
+                print("Warning: Enhanced features not available. Using basic cache.")
+        
         if args.command == "get":
+            import json
             # Parse context if it's a JSON string
             context = args.context
             if context and isinstance(context, str):
@@ -185,11 +194,7 @@ async def main():
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context, using as string: {context}")
             
-            # Handle both sync and async cache methods
-            if hasattr(cache, 'get') and asyncio.iscoroutinefunction(cache.get):
-                result = await cache.get(args.prompt, context)
-            else:
-                result = cache.get(args.prompt, context)
+            result = cache.get(args.prompt, context)
             if result:
                 print(json.dumps(result, indent=4))
             else:
@@ -203,18 +208,11 @@ async def main():
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context, using as string: {context}")
             
-            # Handle both sync and async cache methods
-            if hasattr(cache, 'set') and asyncio.iscoroutinefunction(cache.set):
-                await cache.set(args.prompt, args.response, context)
-            else:
-                cache.set(args.prompt, args.response, context)
+            cache.set(args.prompt, args.response, context)
             print("Cache entry set.")
         elif args.command == "list":
-            # Handle both sync and async cache methods
-            if hasattr(cache, 'list') and asyncio.iscoroutinefunction(cache.list):
-                entries = await cache.list(verbose=args.verbose)
-            else:
-                entries = cache.list(verbose=args.verbose)
+            import json
+            entries = cache.list(verbose=args.verbose)
             if args.verbose:
                 for entry in entries:
                     print(json.dumps(entry, indent=4))
@@ -223,7 +221,7 @@ async def main():
                     print(entry)
         elif args.command == "clear":
             if args.interactive:
-                entries = await cache.list(verbose=True)
+                entries = cache.list(verbose=True)
                 if not entries:
                     print("Cache is empty.")
                     return
@@ -243,16 +241,17 @@ async def main():
                             selected_indices.add(int(part) - 1)
 
                     for i in sorted(list(selected_indices), reverse=True):
-                        await cache.delete(entries[i]['cache_key'])
+                        cache.delete(entries[i]['cache_key'])
                     print("Selected cache entries deleted.")
 
                 except (ValueError, IndexError):
                     print("Invalid selection.")
             else:
-                await cache.clear()
+                cache.clear()
                 print("Cache cleared.")
         elif args.command == "inspect":
-            result = await cache.inspect(args.cache_key)
+            import json
+            result = cache.inspect(args.cache_key)
             if result:
                 print(json.dumps(result, indent=4))
             else:
@@ -285,14 +284,10 @@ complete -F _aicache_completions aicache
 """
             print(completion_script)
         elif args.command == "prune":
-            pruned_count = await cache.prune()
-            print(f"Pruned {pruned_count} expired cache entries.")
+            pruned_count = cache.prune()
+            print(f"Pruned {pruned_count} entries.")
         elif args.command == "stats":
-            # Handle both sync and async cache methods
-            if hasattr(cache, 'stats') and asyncio.iscoroutinefunction(cache.stats):
-                stats = await cache.stats()
-            else:
-                stats = cache.stats()
+            stats = cache.stats()
             print("Cache Statistics:")
             print(f"  Total entries: {stats['num_entries']}")
             print(f"  Total size: {stats['total_size']} bytes")
@@ -359,15 +354,14 @@ class CustomCLIWrapper:
         return await base_wrapper_instance._run_cli_command(self.real_cli_path, args)
 
 # Main execution logic for the generated wrapper
-async def generated_wrapper_main(): # Renamed to avoid conflict with main()
+def generated_wrapper_main(): # Renamed to avoid conflict with main()
     wrapper = CustomCLIWrapper()
     args = sys.argv[1:]
 
     prompt_content, context = wrapper.parse_arguments(args)
 
     cache = Cache()
-    await cache.init_async()
-    cached_response = await cache.get(prompt_content, context)
+    cached_response = cache.get(prompt_content, context)
 
     if cached_response:
         print("--- (aicache HIT) ---", file=sys.stderr)
@@ -375,16 +369,16 @@ async def generated_wrapper_main(): # Renamed to avoid conflict with main()
         sys.exit(0)
     else:
         print("--- (aicache MISS) ---", file=sys.stderr)
-        stdout, return_code, stderr = await wrapper.execute_cli(args)
+        stdout, return_code, stderr = wrapper.execute_cli(args)
         if return_code == 0:
-            await cache.set(prompt_content, stdout, context)
+            cache.set(prompt_content, stdout, context)
             print(stdout)
         if stderr:
             print(stderr, file=sys.stderr)
         sys.exit(return_code)
 
 if __name__ == "__main__":
-    asyncio.run(generated_wrapper_main()) # Call the renamed main function
+    generated_wrapper_main() # Call the renamed main function
 """
             # Write the wrapper content to a file
             output_dir = Path.cwd() / "custom_wrappers"
@@ -400,37 +394,37 @@ if __name__ == "__main__":
             print(f"To use it, add '{output_dir}' to your PATH before the real CLI's path, or create a symlink:")
             print(f"ln -s {output_file} ~/.local/bin/{args.cli_name}")
         elif args.command == "cache-image":
-            await cache.set_image(args.key, args.path)
+            cache.set_image(args.key, args.path)
             print(f"Image cached with key: {args.key}")
         elif args.command == "get-image":
-            image_path = await cache.get_image(args.key)
+            image_path = cache.get_image(args.key)
             if image_path:
                 print(f"Image path: {image_path}")
             else:
                 print("No image found for this key.")
         elif args.command == "cache-notebook":
-            await cache.set_notebook(args.key, args.path)
+            cache.set_notebook(args.key, args.path)
             print(f"Notebook cached with key: {args.key}")
         elif args.command == "get-notebook":
-            notebook_path = await cache.get_notebook(args.key)
+            notebook_path = cache.get_notebook(args.key)
             if notebook_path:
                 print(f"Notebook path: {notebook_path}")
             else:
                 print("No notebook found for this key.")
         elif args.command == "cache-audio":
-            await cache.set_audio(args.key, args.path)
+            cache.set_audio(args.key, args.path)
             print(f"Audio file cached with key: {args.key}")
         elif args.command == "get-audio":
-            audio_path = await cache.get_audio(args.key)
+            audio_path = cache.get_audio(args.key)
             if audio_path:
                 print(f"Audio path: {audio_path}")
             else:
                 print("No audio file found for this key.")
         elif args.command == "cache-video":
-            await cache.set_video(args.key, args.path)
+            cache.set_video(args.key, args.path)
             print(f"Video file cached with key: {args.key}")
         elif args.command == "get-video":
-            video_path = await cache.get_video(args.key)
+            video_path = cache.get_video(args.key)
             if video_path:
                 print(f"Video path: {video_path}")
             else:
@@ -503,7 +497,7 @@ if __name__ == "__main__":
             
             if args.behavioral or not any([args.prefetch, args.patterns]):
                 # Show behavioral analytics
-                analytics = await cache.behavioral_analyzer.get_analytics()
+                analytics = cache.behavioral_analyzer.get_analytics()
                 print("📊 Behavioral Analytics:")
                 print("-" * 40)
                 print(f"Total Queries:      {analytics['total_queries']}")
@@ -517,7 +511,7 @@ if __name__ == "__main__":
             
             if args.prefetch and cache.predictive_prefetcher:
                 # Show prefetch statistics
-                prefetch_stats = await cache.predictive_prefetcher.get_prefetch_stats()
+                prefetch_stats = cache.predictive_prefetcher.get_prefetch_stats()
                 print("\n🚀 Prefetch Statistics:")
                 print("-" * 40)
                 print(f"Total Prefetches:   {prefetch_stats['total_prefetches']}")
@@ -555,7 +549,7 @@ if __name__ == "__main__":
                     'timestamp': time.time()
                 }
                 if cache.predictive_prefetcher:
-                    all_analytics['prefetch'] = await cache.predictive_prefetcher.get_prefetch_stats()
+                    all_analytics['prefetch'] = cache.predictive_prefetcher.get_prefetch_stats()
                 
                 import json
                 with open(args.export, 'w') as f:
@@ -577,7 +571,7 @@ if __name__ == "__main__":
             
             # Get predictions
             recent_queries = [cache.behavioral_analyzer._get_query_hash(args.query, context)]
-            predictions = await cache.behavioral_analyzer.predict_next_queries(
+            predictions = cache.behavioral_analyzer.predict_next_queries(
                 user_id=cache.current_user_id,
                 session_id=cache.current_session_id or "predict-session",
                 recent_queries=recent_queries,
@@ -609,11 +603,11 @@ if __name__ == "__main__":
                     print(f"Warning: Invalid JSON context: {args.context}")
             
             # Schedule prefetch
-            await cache.predictive_prefetcher.force_prefetch(
+            asyncio.run(cache.predictive_prefetcher.force_prefetch(
                 query=args.query,
                 context=context,
                 priority=args.priority
-            )
+            ))
             
             print(f"🚀 Prefetch scheduled for: {args.query}")
             print(f"   Priority: {args.priority}")
@@ -622,4 +616,4 @@ if __name__ == "__main__":
             parser.print_help()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

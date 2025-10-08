@@ -6,13 +6,18 @@ This project is a caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) 
 
 ## Features
 
-- Automatic session caching for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` CLIs.
-- Intelligent argument parsing to create accurate cache keys.
-- Persistence of cache across sessions.
-- A rich set of commands to manage the cache (`list`, `inspect`, `clear`).
-- Interactive cache clearing.
-- Shell completions for `bash`.
-- Custom wrapper support for additional AI CLI tools.
+- **Advanced Caching**: Automatic session caching for `gcloud`, `llm`, `openai`, `claude`, `gemini`, and `qwen` CLIs.
+- **Intelligent Parsing**: Intelligent argument parsing to create accurate cache keys.
+- **Persistent Storage**: Persistence of cache across sessions.
+- **Comprehensive Management**: A rich set of commands to manage the cache (`list`, `inspect`, `clear`, `prune`, `stats`).
+- **Interactive Tools**: Interactive cache clearing and management.
+- **Shell Integration**: Completions for `bash` and custom wrapper support.
+- **Semantic Search**: AI-powered semantic matching for similar queries using embedding models.
+- **Behavioral Analytics**: Learning user patterns to optimize caching strategies.
+- **Predictive Prefetching**: Proactively caching likely future queries based on patterns.
+- **Multi-Modal Support**: Cache support for images, notebooks, audio, and video files.
+- **Enhanced Security**: PII detection and data sanitization for sensitive information.
+- **Performance Optimization**: Efficient compression and storage algorithms.
 
 ## Getting Started
 
@@ -43,7 +48,7 @@ Once installed, the `aicache` wrappers for `gcloud`, `llm`, `openai`, `claude`, 
 
 ### CLI Commands
 
-`aicache` provides a command-line interface to manage the cache:
+`aicache` provides a comprehensive command-line interface to manage the cache:
 
 *   `aicache list`: List all cached entries.
     *   `--verbose`: Show more details for each entry.
@@ -51,6 +56,20 @@ Once installed, the `aicache` wrappers for `gcloud`, `llm`, `openai`, `claude`, 
 *   `aicache clear`: Clear the entire cache.
     *   `--interactive`: Interactively select which entries to delete.
 *   `aicache generate-completions`: Generate a bash script for shell completions.
+*   `aicache stats`: Show cache statistics and performance metrics.
+*   `aicache prune`: Remove expired or low-priority cache entries.
+*   `aicache install`: Install/uninstall CLI wrappers and configuration.
+    *   `--setup-wrappers`: Install all available CLI wrappers
+    *   `--config`: Create default configuration file
+    *   `--list`: List available CLI tools
+*   `aicache analytics`: Show behavioral analytics and usage patterns.
+    *   `--behavioral`: Show behavioral analytics
+    *   `--patterns`: Show learned usage patterns
+    *   `--prefetch`: Show prefetch statistics
+*   `aicache predict <query>`: Predict likely next queries based on patterns.
+*   `aicache prefetch <query>`: Prefetch a specific query proactively.
+*   `aicache create-generic-wrapper`: Create custom wrapper for any CLI tool.
+*   `aicache cache-image/cache-notebook/cache-audio/cache-video`: Commands for multi-modal caching.
 
 ## Contributing
 
