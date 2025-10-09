@@ -10,6 +10,7 @@ import asyncio
 
 from .core import Cache
 from .plugins import REGISTERED_PLUGINS
+from .living_brain import BrainStateManager
 
 def main():
     invoked_as = os.path.basename(sys.argv[0])
@@ -612,6 +613,89 @@ if __name__ == "__main__":
             print(f"🚀 Prefetch scheduled for: {args.query}")
             print(f"   Priority: {args.priority}")
             print(f"   Context: {context}")
+        elif args.command == "brain":
+            brain_manager = BrainStateManager()
+            try:
+                import asyncio
+                asyncio.run(brain_manager.init_db())
+            except RuntimeError:
+                # Event loop is already running, try to handle gracefully
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(lambda: asyncio.run(brain_manager.init_db()))
+                    future.result()
+            
+            if args.brain_command == "init":
+                # Initialize a new brain session
+                session = asyncio.run(brain_manager.create_new_session(args.project_id, args.name))
+                print(f"🧠 Brain session initialized: {session.session_id}") 
+                print(f"   Project: {session.project_id}")
+                
+            elif args.brain_command == "switch":
+                # Switch AI provider in current session
+                success = asyncio.run(brain_manager.switch_ai_provider(args.provider))
+                if success:
+                    print(f"🔄 Switched to AI provider: {args.provider}")
+                else:
+                    print(f"❌ Failed to switch to {args.provider}")
+                    
+            elif args.brain_command == "context":
+                # Show current brain context
+                if brain_manager.current_context:
+                    context = brain_manager.current_context
+                    print(f"🧠 Current Brain Context:")
+                    print(f"   Session ID: {context.session_id}")
+                    print(f"   Project: {context.project_id}")
+                    print(f"   Current Task: {context.current_task}")
+                    print(f"   Active Provider: {context.active_ai_provider}")
+                    print(f"   Working Directory: {context.current_working_directory}")
+                    print(f"   Related Files: {len(context.relevant_files)} files")
+                    print(f"   Conversation History: {len(context.conversation_history)} exchanges")
+                else:
+                    print("No active brain session. Initialize one first with 'aicache brain init'.")
+                    
+            elif args.brain_command == "concepts":
+                if args.concepts_command == "add":
+                    concept_id = asyncio.run(brain_manager.add_concept(
+                        args.content, 
+                        args.provider, 
+                        args.tags, 
+                        args.importance
+                    ))
+                    print(f"💡 Added concept to brain: {concept_id[:8]}...")
+                    
+                elif args.concepts_command == "search":
+                    concepts = asyncio.run(brain_manager.get_relevant_concepts(
+                        args.query, 
+                        args.limit
+                    ))
+                    if concepts:
+                        print(f"💡 Found {len(concepts)} relevant concepts:")
+                        for i, concept in enumerate(concepts, 1):
+                            print(f"  {i}. ({concept.importance_score:.2f}) {concept.content[:100]}...")
+                            print(f"     Providers: {', '.join(concept.ai_providers)}")
+                            print()
+                    else:
+                        print(f"No relevant concepts found for: {args.query}")
+                        
+            elif args.brain_command == "stats":
+                if args.project_id:
+                    stats = asyncio.run(brain_manager.get_project_stats(args.project_id))
+                    print(f"📊 Stats for project {args.project_id}:")
+                    print(f"   Total sessions: {stats['total_sessions']}")
+                    print(f"   Total interactions: {stats['total_interactions']}")
+                    print(f"   Total concepts: {stats['total_concepts']}")
+                    print(f"   Avg concept importance: {stats['avg_concept_importance']:.2f}")
+                    print(f"   AI providers used: {stats['unique_ai_providers']}")
+                else:
+                    active_sessions = asyncio.run(brain_manager.get_active_sessions())
+                    print(f"📊 Active brain sessions: {len(active_sessions)}")
+                    for session in active_sessions:
+                        print(f"   - {session.session_id[:8]}... for {session.project_id}")
+                        print(f"     Providers: {', '.join(session.ai_providers_used)}")
+                        print(f"     Interactions: {session.total_interactions}")
+            else:
+                print("Invalid brain command. Use 'aicache brain --help' for options.")
         else:
             parser.print_help()
 

@@ -43,6 +43,7 @@ try:
     from .predictive import PredictivePrefetcher, ContextualLearner
     from .intent import IntentBasedCache, IntentAnalyzer
     from .proactive import ProactiveCodeGenerator
+    from .living_brain import BrainStateManager
     BEHAVIORAL_AVAILABLE = True
     logger.debug("Behavioral modules imported successfully")
 except ImportError as e:
@@ -53,6 +54,7 @@ except ImportError as e:
     IntentBasedCache = None
     IntentAnalyzer = None
     ProactiveCodeGenerator = None
+    BrainStateManager = None
     logger.warning(f"Behavioral modules not available: {e}")
 except Exception as e:
     BEHAVIORAL_AVAILABLE = False
@@ -62,6 +64,7 @@ except Exception as e:
     IntentBasedCache = None
     IntentAnalyzer = None
     ProactiveCodeGenerator = None
+    BrainStateManager = None
     logger.warning(f"Behavioral modules failed to load: {e}")
 
 @dataclass
@@ -369,6 +372,18 @@ class EnhancedCache:
         # Project detector
         self.project_detector = ProjectDetector()
         
+        # Initialize living brain manager for cross-AI session persistence
+        if BEHAVIORAL_AVAILABLE and BrainStateManager:
+            try:
+                self.brain_manager = BrainStateManager(str(self.cache_dir / "brain"))
+                logger.info("Living brain manager initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize brain manager: {e}")
+                self.brain_manager = None
+        else:
+            self.brain_manager = None
+            logger.info("Living brain manager disabled")
+        
         # Session tracking for behavioral analysis
         self.current_session_id = None
         self.current_user_id = "default"  # In practice, would be detected/configured
@@ -411,6 +426,14 @@ class EnhancedCache:
                 except Exception as e:
                     logger.error(f"Failed to initialize behavioral learning system: {e}")
                     # Still continue with basic functionality
+            
+                # Initialize brain manager if available
+                if self.brain_manager:
+                    try:
+                        await self.brain_manager.init_db()
+                        logger.info("Brain manager initialized successfully")
+                    except Exception as e:
+                        logger.error(f"Failed to initialize brain manager: {e}")
         except Exception as e:
             logger.error(f"Critical error during enhanced cache initialization: {e}")
             raise
@@ -784,6 +807,54 @@ class EnhancedCache:
             except Exception as e:
                 logger.error(f"Proactive generation error: {e}")
         
+        # Living brain integration
+        if self.brain_manager and not cache_hit:
+            # For cache misses, we might want to add context to the brain about what was asked
+            try:
+                # Add the query as a concept if we miss
+                ai_provider = enhanced_context.model or "unknown"
+                if ai_provider.startswith("claude"):
+                    ai_provider = "claude"
+                elif ai_provider.startswith("gemini"):
+                    ai_provider = "gemini"
+                elif ai_provider.startswith("gpt") or ai_provider.startswith("openai"):
+                    ai_provider = "openai"
+                elif ai_provider.startswith("qwen"):
+                    ai_provider = "qwen"
+                
+                # Add query context to the brain but with lower importance since it wasn't cached
+                await self.brain_manager.add_concept(
+                    prompt, 
+                    ai_provider, 
+                    tags=["query", enhanced_context.language or "unknown"], 
+                    importance=0.5
+                )
+            except Exception as e:
+                logger.error(f"Brain manager error during get: {e}")
+        elif self.brain_manager and cache_hit and result:
+            # For cache hits, we can add the response to the brain or enhance existing concepts
+            try:
+                ai_provider = enhanced_context.model or "unknown"
+                if ai_provider.startswith("claude"):
+                    ai_provider = "claude"
+                elif ai_provider.startswith("gemini"):
+                    ai_provider = "gemini"
+                elif ai_provider.startswith("gpt") or ai_provider.startswith("openai"):
+                    ai_provider = "openai"
+                elif ai_provider.startswith("qwen"):
+                    ai_provider = "qwen"
+                    
+                # Add the query and response as a high-importance concept
+                full_content = f"Q: {prompt}\nA: {result['response'][:500]}"  # Limit length
+                await self.brain_manager.add_concept(
+                    full_content, 
+                    ai_provider, 
+                    tags=["knowledge", enhanced_context.language or "unknown"], 
+                    importance=1.0
+                )
+            except Exception as e:
+                logger.error(f"Brain manager error during get (cache hit): {e}")
+        
         return result
     
     async def set(self, prompt: str, response: str, context: Union[Dict[str, Any], AdvancedContext] = None, 
@@ -845,6 +916,30 @@ class EnhancedCache:
             
             # Update cache manager
             self.cache_manager.set_cost_estimate(cache_key, cost_estimate)
+            
+            # Living brain integration - add to cross-AI knowledge
+            if self.brain_manager:
+                try:
+                    ai_provider = enhanced_context.model or "unknown"
+                    if ai_provider.startswith("claude"):
+                        ai_provider = "claude"
+                    elif ai_provider.startswith("gemini"):
+                        ai_provider = "gemini"
+                    elif ai_provider.startswith("gpt") or ai_provider.startswith("openai"):
+                        ai_provider = "openai"
+                    elif ai_provider.startswith("qwen"):
+                        ai_provider = "qwen"
+                    
+                    # Add the full Q&A to the brain as a high-importance concept
+                    full_content = f"Q: {sanitized_prompt}\nA: {response[:1000]}"  # Limit length
+                    await self.brain_manager.add_concept(
+                        full_content, 
+                        ai_provider, 
+                        tags=["knowledge", "cached", enhanced_context.language or "unknown"], 
+                        importance=1.0
+                    )
+                except Exception as e:
+                    logger.error(f"Brain manager error during set: {e}")
             
             logger.info(f"Cached entry {cache_key[:8]}...")
             return cache_key
