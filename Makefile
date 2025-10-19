@@ -26,7 +26,18 @@ setup: install install-wrappers
 test: venv
 	$(PYTHON) -m pip install -e .
 	$(PYTHON) -m pip install pytest-asyncio
-	$(PYTHON) -m pytest tests/test_core.py tests/test_cli_wrappers.py -v
+	$(PYTHON) -m pytest tests/test_core.py tests/test_cli_wrappers.py tests/test_cli.py -v
+
+test-all: venv
+	$(PYTHON) -m pip install -e .
+	$(PYTHON) -m pip install pytest-asyncio
+	$(PYTHON) -m pytest tests/ -v
+
+test-feature: venv
+	$(PYTHON) -m pip install -e .
+	$(PYTHON) -m python -m pytest tests/test_core.py tests/test_cli_wrappers.py -v
+	@echo "Running feature tests separately..."
+	@echo "To run feature tests, use: cd tests/feature_tests && python test_suite.py"
 
 clean:
 	rm -rf build dist *.egg-info .aicache .pytest_cache test_project test_project_cli $(VENV_DIR)

@@ -321,15 +321,26 @@ python -m unittest tests/test_cli.py
 
 Run the comprehensive test suite:
 ```bash
-python test_suite.py
+cd tests/feature_tests && python test_suite.py
+```
+
+Or run from project root:
+```bash
+python -m tests.feature_tests.test_suite
 ```
 
 ### Phase Tests
 
 Run phase-specific tests:
 ```bash
-python test_phase2.py
-python test_phase3.py
+cd tests/feature_tests && python test_phase2.py
+cd tests/feature_tests && python test_phase3.py
+```
+
+Or run from project root:
+```bash
+python -m tests.feature_tests.test_phase2
+python -m tests.feature_tests.test_phase3
 ```
 
 ## Manual Testing Checklist
