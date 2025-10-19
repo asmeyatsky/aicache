@@ -37,18 +37,19 @@ class TestCLIWrappers(unittest.TestCase):
         self.assertEqual(prompt, "some command -m gemini-ultra my prompt here")
         self.assertEqual(context["model"], "gemini-ultra")
 
+    @patch('shutil.which', return_value='/usr/local/bin/gemini')
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_gemini_execute_cli(self, mock_run_cli_command):
+    def test_gemini_execute_cli(self, mock_run_cli_command, mock_shutil_which):
         mock_run_cli_command.return_value = ("stdout", 0, "stderr")
         stdout, return_code, stderr = self.gemini_wrapper.execute_cli(["arg1", "arg2"])
-        mock_run_cli_command.assert_called_once_with("/Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/gemini", ["arg1", "arg2"])
+        mock_run_cli_command.assert_called_once_with("/usr/local/bin/gemini", ["arg1", "arg2"])
         self.assertEqual(stdout, "stdout")
         self.assertEqual(return_code, 0)
         self.assertEqual(stderr, "stderr")
 
+    @patch('shutil.which', return_value=None)
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_gemini_execute_cli_not_found(self, mock_run_cli_command):
-        mock_run_cli_command.return_value = ("", 1, "Error: /Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/gemini executable not found.")
+    def test_gemini_execute_cli_not_found(self, mock_run_cli_command, mock_shutil_which):
         stdout, return_code, stderr = self.gemini_wrapper.execute_cli(["arg1"])
         self.assertEqual(stdout, "")
         self.assertEqual(return_code, 1)
@@ -68,18 +69,19 @@ class TestCLIWrappers(unittest.TestCase):
         self.assertEqual(prompt, "qwen chat --model qwen-turbo how are you")
         self.assertEqual(context["model"], "qwen-turbo")
 
+    @patch('shutil.which', return_value='/usr/local/bin/qwen')
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_qwen_execute_cli(self, mock_run_cli_command):
+    def test_qwen_execute_cli(self, mock_run_cli_command, mock_shutil_which):
         mock_run_cli_command.return_value = ("qwen_stdout", 0, "qwen_stderr")
         stdout, return_code, stderr = self.qwen_wrapper.execute_cli(["argA", "argB"])
-        mock_run_cli_command.assert_called_once_with("/Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/qwen", ["argA", "argB"])
+        mock_run_cli_command.assert_called_once_with("/usr/local/bin/qwen", ["argA", "argB"])
         self.assertEqual(stdout, "qwen_stdout")
         self.assertEqual(return_code, 0)
         self.assertEqual(stderr, "qwen_stderr")
 
+    @patch('shutil.which', return_value=None)
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_qwen_execute_cli_not_found(self, mock_run_cli_command):
-        mock_run_cli_command.return_value = ("", 1, "Error: /Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/qwen executable not found.")
+    def test_qwen_execute_cli_not_found(self, mock_run_cli_command, mock_shutil_which):
         stdout, return_code, stderr = self.qwen_wrapper.execute_cli(["arg1"])
         self.assertEqual(stdout, "")
         self.assertEqual(return_code, 1)
@@ -99,18 +101,19 @@ class TestCLIWrappers(unittest.TestCase):
         self.assertEqual(prompt, "claude ask --model claude-3-opus write a haiku")
         self.assertEqual(context["model"], "claude-3-opus")
 
+    @patch('shutil.which', return_value='/usr/local/bin/claude')
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_claude_execute_cli(self, mock_run_cli_command):
+    def test_claude_execute_cli(self, mock_run_cli_command, mock_shutil_which):
         mock_run_cli_command.return_value = ("claude_stdout", 0, "claude_stderr")
         stdout, return_code, stderr = self.claude_wrapper.execute_cli(["query", "--temp", "0.7"])
-        mock_run_cli_command.assert_called_once_with("/Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/claude", ["query", "--temp", "0.7"])
+        mock_run_cli_command.assert_called_once_with("/usr/local/bin/claude", ["query", "--temp", "0.7"])
         self.assertEqual(stdout, "claude_stdout")
         self.assertEqual(return_code, 0)
         self.assertEqual(stderr, "claude_stderr")
 
+    @patch('shutil.which', return_value=None)
     @patch('aicache.plugins.base.CLIWrapper._run_cli_command')
-    def test_claude_execute_cli_not_found(self, mock_run_cli_command):
-        mock_run_cli_command.return_value = ("", 1, "Error: /Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/claude executable not found.")
+    def test_claude_execute_cli_not_found(self, mock_run_cli_command, mock_shutil_which):
         stdout, return_code, stderr = self.claude_wrapper.execute_cli(["arg1"])
         self.assertEqual(stdout, "")
         self.assertEqual(return_code, 1)
