@@ -51,7 +51,7 @@ class ProjectContext:
     language: str
     framework: str
     created_at: float
-    last_accessed: float
+    last_accessed: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)  # Framework-specific config, dependencies, etc.
     tags: List[str] = field(default_factory=list)
     
@@ -123,16 +123,9 @@ class BrainStateManager:
         self.current_context: Optional[PersistentContext] = None
         self.current_project: Optional[ProjectContext] = None
         
-        # Semantic cache for concept relationships
-        semantic_config = self.config.get('semantic_cache', {})
-        if semantic_config.get('enabled', True):
-            try:
-                self.semantic_cache = SemanticCache(semantic_config)
-            except Exception as e:
-                logger.warning(f"Failed to initialize semantic cache: {e}")
-                self.semantic_cache = None
-        else:
-            self.semantic_cache = None
+        # Semantic cache for concept relationships (will be initialized in init_db)
+        self.semantic_cache = None
+        self.semantic_config = self.config.get('semantic_cache', {})
         
         logger.info(f"Brain State Manager initialized at {self.cache_dir}")
     
@@ -203,6 +196,14 @@ class BrainStateManager:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_concepts_project_importance ON cross_ai_concepts(last_accessed, importance_score)')
             
             await conn.commit()
+        
+        # Initialize semantic cache after db setup to prevent asyncio errors
+        if self.semantic_config.get('enabled', True):
+            try:
+                self.semantic_cache = SemanticCache(self.semantic_config)
+            except Exception as e:
+                logger.warning(f"Failed to initialize semantic cache: {e}")
+                self.semantic_cache = None
     
     async def create_new_session(self, project_id: str, project_name: str = None) -> BrainSession:
         """Create a new brain session for a project."""

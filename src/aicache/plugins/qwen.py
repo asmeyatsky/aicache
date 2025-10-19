@@ -38,9 +38,15 @@ class QwenCLIWrapper(CLIWrapper):
         return prompt_content, context
 
     def execute_cli(self, args: list) -> tuple[str, int, str]:
-        real_cli_path = "/Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/qwen"
+        # Use shutil.which to find the CLI executable in PATH
+        real_cli_path = shutil.which("qwen")
+        if real_cli_path is None:
+            return "", 1, "Error: 'qwen' executable not found in PATH"
         return self._run_cli_command(real_cli_path, args)
 
     async def execute_cli_async(self, args: list) -> tuple[str, int, str]:
-        real_cli_path = "/Users/allansmeyatsky/.nvm/versions/node/v22.17.0/bin/qwen"
+        # Use shutil.which to find the CLI executable in PATH
+        real_cli_path = shutil.which("qwen")
+        if real_cli_path is None:
+            return "", 1, "Error: 'qwen' executable not found in PATH"
         return await self._run_cli_command_async(real_cli_path, args)

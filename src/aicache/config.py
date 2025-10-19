@@ -34,11 +34,11 @@ DEFAULT_CONFIG = {
     
     # Analytics and monitoring
     "analytics": {
-        "enabled": True,
+        "enabled": False,  # Changed to False for open source release
         "metrics_retention_days": 90,
         "dashboard_port": 8080,
         "export_interval_hours": 24,
-        "performance_tracking": True
+        "performance_tracking": False  # Changed to False for open source release
     },
     
     # Team collaboration
@@ -183,8 +183,10 @@ intelligent_management:
 #   user_id: "your-user-id"
 
 # Analytics and performance tracking
+# By default analytics are disabled for privacy.
+# Enable only if you consent to data collection.
 analytics:
-  enabled: true
+  # enabled: true
   # dashboard_port: 8080
   # performance_tracking: true
 
@@ -310,13 +312,13 @@ security:
         return {
             'semantic_cache': self.get('semantic_cache.enabled', True),
             'intelligent_management': self.get('intelligent_management.enabled', True),
-            'analytics': self.get('analytics.enabled', True),
+            'analytics': self.get('analytics.enabled', False),  # Changed default to False
             'team_collaboration': self.get('team.enabled', False),
             'streaming': self.get('streaming.enabled', True),
             'knowledge_graph': self.get('advanced.knowledge_graph', True),
             'predictive_caching': self.get('advanced.predictive_caching', False),
             'encryption': self.get('security.encrypt_sensitive', True),
-            'performance_tracking': self.get('analytics.performance_tracking', True),
+            'performance_tracking': self.get('analytics.performance_tracking', False),  # Changed default to False
             'auto_prune': self.get('intelligent_management.auto_prune', True)
         }
     

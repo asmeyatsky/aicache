@@ -342,10 +342,10 @@ class ConfigMigrator:
             if 'cache_size_limit' in current_config:
                 migrated_config['cache_size_limit'] = current_config['cache_size_limit']
             
-            # Enable new features by default for migrated configs
+            # Enable new features by default for migrated configs (except analytics for privacy)
             migrated_config['semantic_cache']['enabled'] = True
             migrated_config['intelligent_management']['enabled'] = True
-            migrated_config['analytics']['enabled'] = True
+            migrated_config['analytics']['enabled'] = False  # Changed to False for privacy
             
             # Save migrated config
             with open(config_file, 'w') as f:
