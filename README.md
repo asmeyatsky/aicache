@@ -1,8 +1,10 @@
 # aicache
 
-AI CLI Session Caching.
+🚀 **AI CLI Session Caching with Token Optimization Analytics**
 
-This project is a caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) to improve developer workflow efficiency.
+This project is a production-grade caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) that improves developer workflow efficiency while providing comprehensive token cost transparency through TOON (Token Optimization Object Notation).
+
+**Key Innovation**: Automatically track, analyze, and optimize token spending with interactive dashboards, CLI tools, and data-driven insights on every cache operation.
 
 ## 🚀 Features
 
@@ -18,6 +20,7 @@ This project is a caching system for AI CLIs (Gemini, Claude, Qwen, and OpenAI) 
 - **Multi-Modal Support**: Cache support for images, notebooks, audio, and video files.
 - **Enhanced Security**: PII detection and data sanitization for sensitive information.
 - **Performance Optimization**: Efficient compression and storage algorithms.
+- **🎯 TOON Analytics**: Comprehensive Token Optimization Object Notation system for transparent cost tracking and analytics (see below).
 
 ## 📦 Installation
 
@@ -79,6 +82,89 @@ Once installed, the `aicache` wrappers for `gcloud`, `llm`, `openai`, `claude`, 
 *   `aicache prefetch <query>`: Prefetch a specific query proactively.
 *   `aicache create-generic-wrapper`: Create custom wrapper for any CLI tool.
 *   `aicache cache-image/cache-notebook/cache-audio/cache-video`: Commands for multi-modal caching.
+
+### 🎯 TOON Commands (Token Optimization Analytics)
+
+TOON provides transparent token cost tracking and optimization insights for every cache operation:
+
+*   `aicache toon list [--limit=50] [-v|--verbose]`: List recent TOON operations with detailed breakdown.
+*   `aicache toon inspect <operation_id>`: View complete details of a specific TOON operation.
+*   `aicache toon last`: Show the most recent TOON operation.
+*   `aicache toon analytics [--period=1d|7d|30d|1w|1m]`: View aggregated cache analytics and metrics.
+*   `aicache toon query [--type=exact_hit|semantic_hit|...] [--min-tokens=100] [--min-similarity=0.9]`: Advanced querying with filters.
+*   `aicache toon export [--format=json|csv|jsonl|msgpack] [--limit=500] [-o|--output=file]`: Export TOON data for analysis.
+*   `aicache toon insights [--days=1]`: Get data-driven recommendations for optimization.
+*   `aicache toon delete <operation_id>`: Delete a specific TOON operation.
+*   `aicache toon clear [--confirm]`: Clear all TOON operations.
+
+## 🎯 TOON: Token Optimization Object Notation
+
+TOON is a comprehensive system that transforms cache operations from a black box into transparent, auditable, cost-optimized intelligence. Every cache operation generates a TOON object that captures:
+
+### What TOON Tracks
+
+✅ **Financial Transparency**
+- Exact token/cost savings per operation
+- Daily cost tracking and ROI calculations
+- Projected monthly/annual savings
+
+✅ **Performance Metrics**
+- Hit rates (exact matches, semantic matches, intent-based)
+- Response times and efficiency scoring
+- Cache age, TTL, and eviction risk
+
+✅ **Decision Context**
+- Why each cache decision was made (exact hit, semantic, intent, miss)
+- Semantic similarity scores and confidence levels
+- Optimization insights and recommendations
+
+✅ **Historical Analytics**
+- Trends in cache performance (improving/declining)
+- Pattern detection and usage patterns
+- Complete audit trail of all operations
+
+### TOON Features
+
+🔹 **Automatic Generation** - TOON is created automatically on every cache operation (0 breaking changes)
+🔹 **CLI Tools** - 9 commands for inspection, analysis, and export
+🔹 **Interactive Dashboard** - Beautiful HTML reports with 4 real-time charts
+🔹 **Automated Reports** - Daily/weekly/monthly report generation
+🔹 **Advanced Querying** - Filter TOONs by type, tokens saved, similarity, time range
+🔹 **Multiple Exports** - JSON, CSV, JSONL, and binary msgpack formats
+🔹 **Data-Driven Insights** - Actionable recommendations for optimization
+
+### Quick TOON Example
+
+```bash
+# View recent cache operations and their savings
+aicache toon list --verbose
+
+# Get detailed breakdown of today's analytics
+aicache toon analytics --period=1d
+
+# Export data for external analysis
+aicache toon export --format=csv --limit=500 > cache_analysis.csv
+
+# Get AI-powered insights for optimization
+aicache toon insights --days=7
+```
+
+### Real Impact
+
+With TOON, you can answer questions like:
+- "How much am I saving with caching?" → $1.35/day, $40.50/month
+- "What's my cache hit rate?" → 87.5% (exact: 65%, semantic: 22%)
+- "Which caching strategy works best?" → Data-driven recommendations
+- "Is cache performance improving?" → Yes, trending up 5% this week
+
+### TOON Documentation
+
+For comprehensive guides on using TOON, see:
+- [TOON_INTRODUCTION.md](docs/TOON_INTRODUCTION.md) - Overview and benefits
+- [TOON_SPECIFICATION.md](docs/TOON_SPECIFICATION.md) - Complete technical specification
+- [TOON_INTEGRATION_GUIDE.md](docs/TOON_INTEGRATION_GUIDE.md) - Integration examples
+- [TOON_QUICK_REFERENCE.md](docs/TOON_QUICK_REFERENCE.md) - CLI command reference
+- [TOON_INDEX.md](TOON_INDEX.md) - Navigation guide
 
 ## 📊 Configuration
 
