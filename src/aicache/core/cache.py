@@ -223,7 +223,7 @@ class CoreCache:
             List of cache entry metadata
         """
         entries = []
-        for cache_key, metadata in list(self._index.items())[:limit or float('inf')]:
+        for cache_key, metadata in list(self._index.items())[:limit if limit is not None else len(self._index)]:
             cache_file = self._get_cache_file(cache_key)
             if cache_file.exists():
                 entry_data = {

@@ -8,7 +8,7 @@ import re # Added for create-generic-wrapper
 import time
 import asyncio
 
-from .core import Cache
+from .core.cache import CoreCache as Cache
 from .plugins import REGISTERED_PLUGINS
 from .living_brain import BrainStateManager
 
