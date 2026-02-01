@@ -11,6 +11,7 @@ import asyncio
 from .core.cache import CoreCache as Cache
 from .plugins import REGISTERED_PLUGINS
 from .living_brain import BrainStateManager
+from .continuation import ContinuationManager, get_continuation_manager
 
 def main():
     invoked_as = os.path.basename(sys.argv[0])
@@ -160,6 +161,74 @@ def main():
         prefetch_parser.add_argument("query", help="Query to prefetch")
         prefetch_parser.add_argument("--context", help="Context for prefetch")
         prefetch_parser.add_argument("--priority", type=int, choices=[1,2,3], default=2, help="Prefetch priority")
+
+        # Brain command
+        brain_parser = subparsers.add_parser("brain", help="Brain session management")
+        brain_subparsers = brain_parser.add_subparsers(dest="brain_command")
+
+        # Brain init command
+        brain_init_parser = brain_subparsers.add_parser("init", help="Initialize a new brain session")
+        brain_init_parser.add_argument("project_id", help="Project ID for the session")
+        brain_init_parser.add_argument("--name", help="Name for the project")
+
+        # Brain switch command
+        brain_switch_parser = brain_subparsers.add_parser("switch", help="Switch AI provider in current session")
+        brain_switch_parser.add_argument("provider", help="AI provider to switch to")
+
+        # Brain context command
+        brain_context_parser = brain_subparsers.add_parser("context", help="Show current brain context")
+
+        # Brain concepts command
+        brain_concepts_parser = brain_subparsers.add_parser("concepts", help="Manage brain concepts")
+        brain_concepts_subparsers = brain_concepts_parser.add_subparsers(dest="concepts_command")
+
+        # Brain concepts add command
+        brain_concepts_add_parser = brain_concepts_subparsers.add_parser("add", help="Add a concept to brain")
+        brain_concepts_add_parser.add_argument("content", help="Content of the concept")
+        brain_concepts_add_parser.add_argument("provider", help="AI provider that generated this concept")
+        brain_concepts_add_parser.add_argument("--tags", nargs="+", default=[], help="Tags for the concept")
+        brain_concepts_add_parser.add_argument("--importance", type=float, default=1.0, help="Importance score (0.0-1.0)")
+
+        # Brain concepts search command
+        brain_concepts_search_parser = brain_concepts_subparsers.add_parser("search", help="Search for concepts in brain")
+        brain_concepts_search_parser.add_argument("query", help="Query to search for")
+        brain_concepts_search_parser.add_argument("--limit", type=int, default=10, help="Limit number of results")
+
+        # Brain continuation command
+        brain_continuation_parser = brain_subparsers.add_parser("continuation", help="Manage session continuation between LLMs")
+        brain_continuation_subparsers = brain_continuation_parser.add_subparsers(dest="continuation_command")
+
+        # Brain continuation create command
+        brain_continuation_create_parser = brain_continuation_subparsers.add_parser("create", help="Create a continuation package")
+        brain_continuation_create_parser.add_argument("source_session_id", help="Source session ID to export from")
+        brain_continuation_create_parser.add_argument("target_llm", help="Target LLM for continuation (e.g., gemini, claude, qwen)")
+        brain_continuation_create_parser.add_argument("--max-conversation-length", type=int, default=20, help="Max conversation turns to include")
+        brain_continuation_create_parser.add_argument("--max-concepts", type=int, default=50, help="Max concepts to include")
+
+        # Brain continuation apply command
+        brain_continuation_apply_parser = brain_continuation_subparsers.add_parser("apply", help="Apply a continuation package to a session")
+        brain_continuation_apply_parser.add_argument("package_id", help="ID of the continuation package to apply")
+        brain_continuation_apply_parser.add_argument("target_session_id", help="Target session ID to apply to")
+
+        # Brain continuation search command
+        brain_continuation_search_parser = brain_continuation_subparsers.add_parser("search", help="Search for relevant continuation packages")
+        brain_continuation_search_parser.add_argument("query", help="Natural language query to search for")
+        brain_continuation_search_parser.add_argument("--target-llm", help="Filter by target LLM")
+        brain_continuation_search_parser.add_argument("--limit", type=int, default=10, help="Limit number of results")
+
+        # Brain continuation list command
+        brain_continuation_list_parser = brain_continuation_subparsers.add_parser("list", help="List continuation packages")
+        brain_continuation_list_parser.add_argument("--target-llm", help="Filter by target LLM")
+        brain_continuation_list_parser.add_argument("--source-session-id", help="Filter by source session ID")
+        brain_continuation_list_parser.add_argument("--limit", type=int, default=50, help="Limit number of results")
+
+        # Brain continuation inspect command
+        brain_continuation_inspect_parser = brain_continuation_subparsers.add_parser("inspect", help="Inspect a continuation package")
+        brain_continuation_inspect_parser.add_argument("package_id", help="ID of the continuation package to inspect")
+
+        # Brain stats command
+        brain_stats_parser = brain_subparsers.add_parser("stats", help="Show brain statistics")
+        brain_stats_parser.add_argument("--project-id", help="Project ID to get stats for")
 
         args = parser.parse_args()
         
@@ -624,13 +693,27 @@ if __name__ == "__main__":
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     future = executor.submit(lambda: asyncio.run(brain_manager.init_db()))
                     future.result()
-            
+
+            # Initialize continuation manager and link to brain manager
+            continuation_manager = get_continuation_manager()
+            try:
+                asyncio.run(continuation_manager.init_db())
+                asyncio.run(continuation_manager.set_brain_manager(brain_manager))
+            except RuntimeError:
+                # Event loop is already running, try to handle gracefully
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(lambda: asyncio.run(continuation_manager.init_db()))
+                    future.result()
+                    future = executor.submit(lambda: asyncio.run(continuation_manager.set_brain_manager(brain_manager)))
+                    future.result()
+
             if args.brain_command == "init":
                 # Initialize a new brain session
                 session = asyncio.run(brain_manager.create_new_session(args.project_id, args.name))
-                print(f"🧠 Brain session initialized: {session.session_id}") 
+                print(f"🧠 Brain session initialized: {session.session_id}")
                 print(f"   Project: {session.project_id}")
-                
+
             elif args.brain_command == "switch":
                 # Switch AI provider in current session
                 success = asyncio.run(brain_manager.switch_ai_provider(args.provider))
@@ -638,7 +721,7 @@ if __name__ == "__main__":
                     print(f"🔄 Switched to AI provider: {args.provider}")
                 else:
                     print(f"❌ Failed to switch to {args.provider}")
-                    
+
             elif args.brain_command == "context":
                 # Show current brain context
                 if brain_manager.current_context:
@@ -653,20 +736,20 @@ if __name__ == "__main__":
                     print(f"   Conversation History: {len(context.conversation_history)} exchanges")
                 else:
                     print("No active brain session. Initialize one first with 'aicache brain init'.")
-                    
+
             elif args.brain_command == "concepts":
                 if args.concepts_command == "add":
                     concept_id = asyncio.run(brain_manager.add_concept(
-                        args.content, 
-                        args.provider, 
-                        args.tags, 
+                        args.content,
+                        args.provider,
+                        args.tags,
                         args.importance
                     ))
                     print(f"💡 Added concept to brain: {concept_id[:8]}...")
-                    
+
                 elif args.concepts_command == "search":
                     concepts = asyncio.run(brain_manager.get_relevant_concepts(
-                        args.query, 
+                        args.query,
                         args.limit
                     ))
                     if concepts:
@@ -677,7 +760,86 @@ if __name__ == "__main__":
                             print()
                     else:
                         print(f"No relevant concepts found for: {args.query}")
-                        
+
+            elif args.brain_command == "continuation":
+                if args.continuation_command == "create":
+                    # Create a continuation package
+                    package_id = asyncio.run(continuation_manager.create_continuation_package(
+                        args.source_session_id,
+                        args.target_llm,
+                        max_conversation_length=args.max_conversation_length,
+                        max_concepts=args.max_concepts
+                    ))
+                    if package_id:
+                        print(f"🔄 Created continuation package: {package_id}")
+                        print(f"   Source session: {args.source_session_id}")
+                        print(f"   Target LLM: {args.target_llm}")
+                    else:
+                        print("❌ Failed to create continuation package")
+
+                elif args.continuation_command == "apply":
+                    # Apply a continuation package to a session
+                    success = asyncio.run(continuation_manager.apply_continuation_package(
+                        args.package_id,
+                        args.target_session_id
+                    ))
+                    if success:
+                        print(f"🔄 Applied continuation package {args.package_id} to session {args.target_session_id}")
+                    else:
+                        print(f"❌ Failed to apply continuation package {args.package_id}")
+
+                elif args.continuation_command == "search":
+                    # Search for relevant continuation packages
+                    results = asyncio.run(continuation_manager.search_continuation_packages(
+                        args.query,
+                        target_llm=args.target_llm,
+                        limit=args.limit
+                    ))
+                    if results:
+                        print(f"🔄 Found {len(results)} relevant continuation packages:")
+                        for i, (package, score) in enumerate(results, 1):
+                            print(f"  {i}. Score: {score:.3f} | Package: {package.package_id[:8]}...")
+                            print(f"     Source: {package.source_session_id[:8]}... → Target: {package.target_llm}")
+                            print(f"     Task: {package.current_task or 'N/A'}")
+                            print(f"     Time: {package.timestamp}")
+                    else:
+                        print(f"❌ No relevant continuation packages found for: {args.query}")
+
+                elif args.continuation_command == "list":
+                    # List continuation packages
+                    packages = asyncio.run(continuation_manager.list_packages(
+                        target_llm=args.target_llm,
+                        source_session_id=getattr(args, 'source_session_id', None),
+                        limit=args.limit
+                    ))
+                    if packages:
+                        print(f"🔄 Available continuation packages ({len(packages)} total):")
+                        for pkg in packages:
+                            print(f"  ID: {pkg['package_id'][:8]}...")
+                            print(f"    Source: {pkg['source_session_id'][:8]}... | Target: {pkg['target_llm']}")
+                            print(f"    Task: {pkg['current_task'] or 'N/A'}")
+                            print(f"    Time: {pkg['timestamp_readable']}")
+                            print()
+                    else:
+                        print("No continuation packages found.")
+
+                elif args.continuation_command == "inspect":
+                    # Inspect a specific continuation package
+                    package = asyncio.run(continuation_manager.load_continuation_package(args.package_id))
+                    if package:
+                        print(f"🔄 Continuation Package: {package.package_id}")
+                        print(f"   Source Session: {package.source_session_id}")
+                        print(f"   Source LLM: {package.source_llm}")
+                        print(f"   Target LLM: {package.target_llm}")
+                        print(f"   Creation Time: {package.timestamp}")
+                        print(f"   Current Task: {package.current_task}")
+                        print(f"   Project: {package.project_context.get('name', 'N/A') if package.project_context else 'N/A'}")
+                        print(f"   Concepts: {len(package.summary_concepts)}")
+                        print(f"   Conversation Turns: {len(package.recent_conversation)}")
+                        print(f"   Relevant Files: {len(package.relevant_files)}")
+                    else:
+                        print(f"❌ Continuation package not found: {args.package_id}")
+
             elif args.brain_command == "stats":
                 if args.project_id:
                     stats = asyncio.run(brain_manager.get_project_stats(args.project_id))
