@@ -7,12 +7,12 @@ from pathlib import Path
 import sys
 
 # Add the src directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 from aicache.core import Cache
 
-class TestCache(unittest.TestCase):
 
+class TestCache(unittest.TestCase):
     def setUp(self):
         # Use a temporary directory for the cache to avoid interfering with the real cache
         self.test_cache_dir = Path.cwd() / "temp_test_cache"
@@ -30,8 +30,8 @@ class TestCache(unittest.TestCase):
         self.cache.set(prompt, response)
         cached_data = self.cache.get(prompt)
         self.assertIsNotNone(cached_data)
-        self.assertEqual(cached_data['prompt'], prompt)
-        self.assertEqual(cached_data['response'], response)
+        self.assertEqual(cached_data["prompt"], prompt)
+        self.assertEqual(cached_data["response"], response)
 
     def test_set_and_get_with_context(self):
         """Test that context creates a distinct cache entry."""
@@ -45,8 +45,8 @@ class TestCache(unittest.TestCase):
         self.cache.set(prompt, response_fr, context_fr)
 
         # Verify that the correct response is returned for each context
-        self.assertEqual(self.cache.get(prompt, context_en)['response'], response_en)
-        self.assertEqual(self.cache.get(prompt, context_fr)['response'], response_fr)
+        self.assertEqual(self.cache.get(prompt, context_en)["response"], response_en)
+        self.assertEqual(self.cache.get(prompt, context_fr)["response"], response_fr)
 
     def test_get_non_existent(self):
         """Test getting a cache entry that does not exist."""
@@ -66,13 +66,13 @@ class TestCache(unittest.TestCase):
         # Test list verbose
         verbose_entries = self.cache.list(verbose=True)
         self.assertEqual(len(verbose_entries), 1)
-        self.assertEqual(verbose_entries[0]['cache_key'], cache_key)
-        self.assertEqual(verbose_entries[0]['prompt'], prompt)
+        self.assertEqual(verbose_entries[0]["cache_key"], cache_key)
+        self.assertEqual(verbose_entries[0]["prompt"], prompt)
 
         # Test inspect
         inspected_data = self.cache.inspect(cache_key)
         self.assertIsNotNone(inspected_data)
-        self.assertEqual(inspected_data['response'], response)
+        self.assertEqual(inspected_data["response"], response)
 
         # Test delete
         self.assertTrue(self.cache.delete(cache_key))
@@ -98,10 +98,12 @@ class TestCache(unittest.TestCase):
 
         # Manually set the timestamp to be old
         cache_key = self.cache._get_cache_key(prompt)
-        cache_file = self.cache.cache_dir / cache_key
-        with open(cache_file, 'r+') as f:
+        cache_file = (
+            self.cache.cache_dir / f"{cache_key}.json"
+        )  # Fixed: add .json extension
+        with open(cache_file, "r+") as f:
             data = json.load(f)
-            data['timestamp'] = time.time() - (31 * 86400) # 31 days ago
+            data["timestamp"] = time.time() - (31 * 86400)  # 31 days ago
             f.seek(0)
             json.dump(data, f)
             f.truncate()
@@ -115,8 +117,9 @@ class TestCache(unittest.TestCase):
         self.cache.set("stats_prompt_1", "response1")
         self.cache.set("stats_prompt_2", "response2")
         stats = self.cache.stats()
-        self.assertEqual(stats['num_entries'], 2)
-        self.assertGreater(stats['total_size'], 0)
+        self.assertEqual(stats["num_entries"], 2)
+        self.assertGreater(stats["total_size"], 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

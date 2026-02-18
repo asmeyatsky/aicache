@@ -1,10 +1,23 @@
+"""
+DEPRECATED CLI MODULE
+
+This module is deprecated. Please use the new unified CLI:
+    from aicache.modern_cli import main
+
+Or run:
+    aicache --help
+
+This module will be removed in version 0.3.0
+"""
+
 import argparse
 import json
 import sys
 import os
+import warnings
 from pathlib import Path
-import shutil # Added for create-generic-wrapper
-import re # Added for create-generic-wrapper
+import shutil  # Added for create-generic-wrapper
+import re  # Added for create-generic-wrapper
 import time
 import asyncio
 
@@ -13,13 +26,21 @@ from .plugins import REGISTERED_PLUGINS
 from .living_brain import BrainStateManager
 from .continuation import ContinuationManager, get_continuation_manager
 
+
 def main():
+    # Print deprecation warning
+    warnings.warn(
+        "The 'aicache.cli' module is deprecated since version 0.2.0. "
+        "Use 'aicache.modern_cli' or run 'aicache --help' for the new CLI.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     invoked_as = os.path.basename(sys.argv[0])
 
     if invoked_as in REGISTERED_PLUGINS:
         # This is a wrapped CLI call (e.g., gcloud, llm, openai)
         wrapper = REGISTERED_PLUGINS[invoked_as]()
-        args = sys.argv[1:] # Arguments passed to the wrapped CLI
+        args = sys.argv[1:]  # Arguments passed to the wrapped CLI
 
         prompt_content, context = wrapper.parse_arguments(args)
 
@@ -133,129 +154,231 @@ def main():
 
         # Install command
         install_parser = subparsers.add_parser("install")
-        install_parser.add_argument("--setup-wrappers", action="store_true", help="Install CLI wrappers")
-        install_parser.add_argument("--force", action="store_true", help="Force overwrite existing wrappers")
-        install_parser.add_argument("--list", action="store_true", help="List available CLI tools")
-        install_parser.add_argument("--config", action="store_true", help="Create default config file")
-        install_parser.add_argument("tool", nargs="?", help="Specific tool to install wrapper for")
+        install_parser.add_argument(
+            "--setup-wrappers", action="store_true", help="Install CLI wrappers"
+        )
+        install_parser.add_argument(
+            "--force", action="store_true", help="Force overwrite existing wrappers"
+        )
+        install_parser.add_argument(
+            "--list", action="store_true", help="List available CLI tools"
+        )
+        install_parser.add_argument(
+            "--config", action="store_true", help="Create default config file"
+        )
+        install_parser.add_argument(
+            "tool", nargs="?", help="Specific tool to install wrapper for"
+        )
 
-        # Uninstall command  
+        # Uninstall command
         uninstall_parser = subparsers.add_parser("uninstall")
         uninstall_parser.add_argument("tool", help="Tool to remove wrapper for")
 
         # Analytics command
         analytics_parser = subparsers.add_parser("analytics")
-        analytics_parser.add_argument("--behavioral", action="store_true", help="Show behavioral analytics")
-        analytics_parser.add_argument("--prefetch", action="store_true", help="Show prefetch statistics")
-        analytics_parser.add_argument("--patterns", action="store_true", help="Show learned patterns")
+        analytics_parser.add_argument(
+            "--behavioral", action="store_true", help="Show behavioral analytics"
+        )
+        analytics_parser.add_argument(
+            "--prefetch", action="store_true", help="Show prefetch statistics"
+        )
+        analytics_parser.add_argument(
+            "--patterns", action="store_true", help="Show learned patterns"
+        )
         analytics_parser.add_argument("--export", help="Export analytics to file")
 
         # Predict command
         predict_parser = subparsers.add_parser("predict")
         predict_parser.add_argument("query", help="Query to predict next steps for")
         predict_parser.add_argument("--context", help="Context for prediction")
-        predict_parser.add_argument("--confidence", type=float, default=0.6, help="Minimum confidence threshold")
+        predict_parser.add_argument(
+            "--confidence", type=float, default=0.6, help="Minimum confidence threshold"
+        )
 
         # Prefetch command
         prefetch_parser = subparsers.add_parser("prefetch")
         prefetch_parser.add_argument("query", help="Query to prefetch")
         prefetch_parser.add_argument("--context", help="Context for prefetch")
-        prefetch_parser.add_argument("--priority", type=int, choices=[1,2,3], default=2, help="Prefetch priority")
+        prefetch_parser.add_argument(
+            "--priority",
+            type=int,
+            choices=[1, 2, 3],
+            default=2,
+            help="Prefetch priority",
+        )
 
         # Brain command
         brain_parser = subparsers.add_parser("brain", help="Brain session management")
         brain_subparsers = brain_parser.add_subparsers(dest="brain_command")
 
         # Brain init command
-        brain_init_parser = brain_subparsers.add_parser("init", help="Initialize a new brain session")
+        brain_init_parser = brain_subparsers.add_parser(
+            "init", help="Initialize a new brain session"
+        )
         brain_init_parser.add_argument("project_id", help="Project ID for the session")
         brain_init_parser.add_argument("--name", help="Name for the project")
 
         # Brain switch command
-        brain_switch_parser = brain_subparsers.add_parser("switch", help="Switch AI provider in current session")
+        brain_switch_parser = brain_subparsers.add_parser(
+            "switch", help="Switch AI provider in current session"
+        )
         brain_switch_parser.add_argument("provider", help="AI provider to switch to")
 
         # Brain context command
-        brain_context_parser = brain_subparsers.add_parser("context", help="Show current brain context")
+        brain_context_parser = brain_subparsers.add_parser(
+            "context", help="Show current brain context"
+        )
 
         # Brain concepts command
-        brain_concepts_parser = brain_subparsers.add_parser("concepts", help="Manage brain concepts")
-        brain_concepts_subparsers = brain_concepts_parser.add_subparsers(dest="concepts_command")
+        brain_concepts_parser = brain_subparsers.add_parser(
+            "concepts", help="Manage brain concepts"
+        )
+        brain_concepts_subparsers = brain_concepts_parser.add_subparsers(
+            dest="concepts_command"
+        )
 
         # Brain concepts add command
-        brain_concepts_add_parser = brain_concepts_subparsers.add_parser("add", help="Add a concept to brain")
+        brain_concepts_add_parser = brain_concepts_subparsers.add_parser(
+            "add", help="Add a concept to brain"
+        )
         brain_concepts_add_parser.add_argument("content", help="Content of the concept")
-        brain_concepts_add_parser.add_argument("provider", help="AI provider that generated this concept")
-        brain_concepts_add_parser.add_argument("--tags", nargs="+", default=[], help="Tags for the concept")
-        brain_concepts_add_parser.add_argument("--importance", type=float, default=1.0, help="Importance score (0.0-1.0)")
+        brain_concepts_add_parser.add_argument(
+            "provider", help="AI provider that generated this concept"
+        )
+        brain_concepts_add_parser.add_argument(
+            "--tags", nargs="+", default=[], help="Tags for the concept"
+        )
+        brain_concepts_add_parser.add_argument(
+            "--importance", type=float, default=1.0, help="Importance score (0.0-1.0)"
+        )
 
         # Brain concepts search command
-        brain_concepts_search_parser = brain_concepts_subparsers.add_parser("search", help="Search for concepts in brain")
+        brain_concepts_search_parser = brain_concepts_subparsers.add_parser(
+            "search", help="Search for concepts in brain"
+        )
         brain_concepts_search_parser.add_argument("query", help="Query to search for")
-        brain_concepts_search_parser.add_argument("--limit", type=int, default=10, help="Limit number of results")
+        brain_concepts_search_parser.add_argument(
+            "--limit", type=int, default=10, help="Limit number of results"
+        )
 
         # Brain continuation command
-        brain_continuation_parser = brain_subparsers.add_parser("continuation", help="Manage session continuation between LLMs")
-        brain_continuation_subparsers = brain_continuation_parser.add_subparsers(dest="continuation_command")
+        brain_continuation_parser = brain_subparsers.add_parser(
+            "continuation", help="Manage session continuation between LLMs"
+        )
+        brain_continuation_subparsers = brain_continuation_parser.add_subparsers(
+            dest="continuation_command"
+        )
 
         # Brain continuation create command
-        brain_continuation_create_parser = brain_continuation_subparsers.add_parser("create", help="Create a continuation package")
-        brain_continuation_create_parser.add_argument("source_session_id", help="Source session ID to export from")
-        brain_continuation_create_parser.add_argument("target_llm", help="Target LLM for continuation (e.g., gemini, claude, qwen)")
-        brain_continuation_create_parser.add_argument("--max-conversation-length", type=int, default=20, help="Max conversation turns to include")
-        brain_continuation_create_parser.add_argument("--max-concepts", type=int, default=50, help="Max concepts to include")
+        brain_continuation_create_parser = brain_continuation_subparsers.add_parser(
+            "create", help="Create a continuation package"
+        )
+        brain_continuation_create_parser.add_argument(
+            "source_session_id", help="Source session ID to export from"
+        )
+        brain_continuation_create_parser.add_argument(
+            "target_llm",
+            help="Target LLM for continuation (e.g., gemini, claude, qwen)",
+        )
+        brain_continuation_create_parser.add_argument(
+            "--max-conversation-length",
+            type=int,
+            default=20,
+            help="Max conversation turns to include",
+        )
+        brain_continuation_create_parser.add_argument(
+            "--max-concepts", type=int, default=50, help="Max concepts to include"
+        )
 
         # Brain continuation apply command
-        brain_continuation_apply_parser = brain_continuation_subparsers.add_parser("apply", help="Apply a continuation package to a session")
-        brain_continuation_apply_parser.add_argument("package_id", help="ID of the continuation package to apply")
-        brain_continuation_apply_parser.add_argument("target_session_id", help="Target session ID to apply to")
+        brain_continuation_apply_parser = brain_continuation_subparsers.add_parser(
+            "apply", help="Apply a continuation package to a session"
+        )
+        brain_continuation_apply_parser.add_argument(
+            "package_id", help="ID of the continuation package to apply"
+        )
+        brain_continuation_apply_parser.add_argument(
+            "target_session_id", help="Target session ID to apply to"
+        )
 
         # Brain continuation search command
-        brain_continuation_search_parser = brain_continuation_subparsers.add_parser("search", help="Search for relevant continuation packages")
-        brain_continuation_search_parser.add_argument("query", help="Natural language query to search for")
-        brain_continuation_search_parser.add_argument("--target-llm", help="Filter by target LLM")
-        brain_continuation_search_parser.add_argument("--limit", type=int, default=10, help="Limit number of results")
+        brain_continuation_search_parser = brain_continuation_subparsers.add_parser(
+            "search", help="Search for relevant continuation packages"
+        )
+        brain_continuation_search_parser.add_argument(
+            "query", help="Natural language query to search for"
+        )
+        brain_continuation_search_parser.add_argument(
+            "--target-llm", help="Filter by target LLM"
+        )
+        brain_continuation_search_parser.add_argument(
+            "--limit", type=int, default=10, help="Limit number of results"
+        )
 
         # Brain continuation list command
-        brain_continuation_list_parser = brain_continuation_subparsers.add_parser("list", help="List continuation packages")
-        brain_continuation_list_parser.add_argument("--target-llm", help="Filter by target LLM")
-        brain_continuation_list_parser.add_argument("--source-session-id", help="Filter by source session ID")
-        brain_continuation_list_parser.add_argument("--limit", type=int, default=50, help="Limit number of results")
+        brain_continuation_list_parser = brain_continuation_subparsers.add_parser(
+            "list", help="List continuation packages"
+        )
+        brain_continuation_list_parser.add_argument(
+            "--target-llm", help="Filter by target LLM"
+        )
+        brain_continuation_list_parser.add_argument(
+            "--source-session-id", help="Filter by source session ID"
+        )
+        brain_continuation_list_parser.add_argument(
+            "--limit", type=int, default=50, help="Limit number of results"
+        )
 
         # Brain continuation inspect command
-        brain_continuation_inspect_parser = brain_continuation_subparsers.add_parser("inspect", help="Inspect a continuation package")
-        brain_continuation_inspect_parser.add_argument("package_id", help="ID of the continuation package to inspect")
+        brain_continuation_inspect_parser = brain_continuation_subparsers.add_parser(
+            "inspect", help="Inspect a continuation package"
+        )
+        brain_continuation_inspect_parser.add_argument(
+            "package_id", help="ID of the continuation package to inspect"
+        )
 
         # Brain stats command
-        brain_stats_parser = brain_subparsers.add_parser("stats", help="Show brain statistics")
-        brain_stats_parser.add_argument("--project-id", help="Project ID to get stats for")
+        brain_stats_parser = brain_subparsers.add_parser(
+            "stats", help="Show brain statistics"
+        )
+        brain_stats_parser.add_argument(
+            "--project-id", help="Project ID to get stats for"
+        )
 
         args = parser.parse_args()
-        
-        cache = Cache()  # Use basic cache for general CLI commands to avoid initialization overhead
+
+        cache = (
+            Cache()
+        )  # Use basic cache for general CLI commands to avoid initialization overhead
 
         # For advanced commands that require EnhancedCache features, initialize it
         advanced_commands = {"analytics", "predict", "prefetch"}
         if args.command in advanced_commands:
             try:
                 from .enhanced_core import EnhancedCache
+
                 cache = EnhancedCache()
                 # Initialize the async components - handle possible running event loop
                 try:
                     import asyncio
+
                     asyncio.run(cache.init_async())
                 except RuntimeError:
                     # Event loop is already running, try to handle gracefully
                     import concurrent.futures
+
                     with concurrent.futures.ThreadPoolExecutor() as executor:
-                        future = executor.submit(lambda: asyncio.run(cache.init_async()))
+                        future = executor.submit(
+                            lambda: asyncio.run(cache.init_async())
+                        )
                         future.result()
             except ImportError:
                 cache = Cache()
                 print("Warning: Enhanced features not available. Using basic cache.")
-        
+
         if args.command == "get":
             import json
+
             # Parse context if it's a JSON string
             context = args.context
             if context and isinstance(context, str):
@@ -263,7 +386,7 @@ def main():
                     context = json.loads(context)
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context, using as string: {context}")
-            
+
             result = cache.get(args.prompt, context)
             if result:
                 print(json.dumps(result, indent=4))
@@ -277,11 +400,12 @@ def main():
                     context = json.loads(context)
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context, using as string: {context}")
-            
+
             cache.set(args.prompt, args.response, context)
             print("Cache entry set.")
         elif args.command == "list":
             import json
+
             entries = cache.list(verbose=args.verbose)
             if args.verbose:
                 for entry in entries:
@@ -298,20 +422,20 @@ def main():
 
                 print("Select cache entries to delete (e.g., 1,3-5):")
                 for i, entry in enumerate(entries):
-                    print(f"{i+1}: {entry['cache_key']} - {entry['prompt']}")
+                    print(f"{i + 1}: {entry['cache_key']} - {entry['prompt']}")
 
                 try:
                     selection = input("Enter numbers: ")
                     selected_indices = set()
-                    for part in selection.split(','):
-                        if '-' in part:
-                            start, end = map(int, part.split('-'))
+                    for part in selection.split(","):
+                        if "-" in part:
+                            start, end = map(int, part.split("-"))
                             selected_indices.update(range(start - 1, end))
                         else:
                             selected_indices.add(int(part) - 1)
 
                     for i in sorted(list(selected_indices), reverse=True):
-                        cache.delete(entries[i]['cache_key'])
+                        cache.delete(entries[i]["cache_key"])
                     print("Selected cache entries deleted.")
 
                 except (ValueError, IndexError):
@@ -321,6 +445,7 @@ def main():
                 print("Cache cleared.")
         elif args.command == "inspect":
             import json
+
             result = cache.inspect(args.cache_key)
             if result:
                 print(json.dumps(result, indent=4))
@@ -361,7 +486,7 @@ complete -F _aicache_completions aicache
             print("Cache Statistics:")
             print(f"  Total entries: {stats['num_entries']}")
             print(f"  Total size: {stats['total_size']} bytes")
-            if stats.get('num_expired', 0) > 0:
+            if stats.get("num_expired", 0) > 0:
                 print(f"  Expired entries: {stats['num_expired']}")
         elif args.command == "create-generic-wrapper":
             # Generate the content of the generic wrapper script
@@ -456,12 +581,14 @@ if __name__ == "__main__":
             output_file = output_dir / f"{args.cli_name}_wrapper.py"
             with open(output_file, "w") as f:
                 f.write(wrapper_content)
-            
+
             # Make it executable
             os.chmod(output_file, 0o755)
 
             print(f"Generic wrapper for '{args.cli_name}' created at: {output_file}")
-            print(f"To use it, add '{output_dir}' to your PATH before the real CLI's path, or create a symlink:")
+            print(
+                f"To use it, add '{output_dir}' to your PATH before the real CLI's path, or create a symlink:"
+            )
             print(f"ln -s {output_file} ~/.local/bin/{args.cli_name}")
         elif args.command == "cache-image":
             cache.set_image(args.key, args.path)
@@ -501,45 +628,50 @@ if __name__ == "__main__":
                 print("No video file found for this key.")
         elif args.command == "install":
             from .installer import AICacheInstaller
+
             installer = AICacheInstaller()
-            
+
             if args.list:
                 # List available CLI tools
                 wrappers = installer.list_wrappers()
                 print("Available CLI Tools:")
                 print("-" * 50)
                 for wrapper in wrappers:
-                    print(f"{wrapper['name']:12} | {wrapper['status']} | {wrapper['description']}")
-                
+                    print(
+                        f"{wrapper['name']:12} | {wrapper['status']} | {wrapper['description']}"
+                    )
+
                 # Check PATH setup
                 path_info = installer.check_path_setup()
-                if not path_info['in_path']:
+                if not path_info["in_path"]:
                     print(f"\n⚠️  {path_info['local_bin_path']} is not in your PATH")
                     print("Setup instructions:")
-                    for instruction in path_info['setup_instructions']:
+                    for instruction in path_info["setup_instructions"]:
                         print(f"  {instruction}")
-                        
+
             elif args.config:
                 # Create config file
                 config_path = installer.create_config_file()
                 print(f"✅ Created config file at {config_path}")
-                
+
             elif args.setup_wrappers:
                 # Install all available wrappers
                 results = installer.install_all_available(force=args.force)
                 installed = [k for k, v in results.items() if v]
                 skipped = [k for k, v in results.items() if not v]
-                
+
                 if installed:
                     print(f"✅ Installed wrappers: {', '.join(installed)}")
                 if skipped:
                     print(f"⏭️  Skipped: {', '.join(skipped)}")
-                    
+
                 # Check PATH
                 path_info = installer.check_path_setup()
-                if not path_info['in_path']:
-                    print(f"\n⚠️  Don't forget to add {path_info['local_bin_path']} to your PATH!")
-                    
+                if not path_info["in_path"]:
+                    print(
+                        f"\n⚠️  Don't forget to add {path_info['local_bin_path']} to your PATH!"
+                    )
+
             elif args.tool:
                 # Install specific tool wrapper
                 success = installer.install_wrapper(args.tool, force=args.force)
@@ -549,11 +681,12 @@ if __name__ == "__main__":
                     print(f"❌ Failed to install {args.tool} wrapper")
             else:
                 install_parser.print_help()
-                
+
         elif args.command == "uninstall":
             from .installer import AICacheInstaller
+
             installer = AICacheInstaller()
-            
+
             success = installer.uninstall_wrapper(args.tool)
             if success:
                 print(f"✅ Removed {args.tool} wrapper")
@@ -561,10 +694,13 @@ if __name__ == "__main__":
                 print(f"❌ Failed to remove {args.tool} wrapper")
         elif args.command == "analytics":
             # Check if enhanced cache is available
-            if not hasattr(cache, 'behavioral_analyzer') or not cache.behavioral_analyzer:
+            if (
+                not hasattr(cache, "behavioral_analyzer")
+                or not cache.behavioral_analyzer
+            ):
                 print("❌ Behavioral analytics not available. Enhanced cache required.")
                 return
-            
+
             if args.behavioral or not any([args.prefetch, args.patterns]):
                 # Show behavioral analytics
                 analytics = cache.behavioral_analyzer.get_analytics()
@@ -578,7 +714,7 @@ if __name__ == "__main__":
                 print(f"Active Patterns:    {analytics['active_patterns']}")
                 print(f"Total Patterns:     {analytics['total_patterns']}")
                 print(f"Context Triggers:   {analytics['contextual_triggers']}")
-            
+
             if args.prefetch and cache.predictive_prefetcher:
                 # Show prefetch statistics
                 prefetch_stats = cache.predictive_prefetcher.get_prefetch_stats()
@@ -586,51 +722,73 @@ if __name__ == "__main__":
                 print("-" * 40)
                 print(f"Total Prefetches:   {prefetch_stats['total_prefetches']}")
                 print(f"Success Rate:       {prefetch_stats['success_rate']:.2%}")
-                print(f"Avg Execution:      {prefetch_stats['avg_execution_time']:.2f}s")
-                print(f"Total Cost:         ${prefetch_stats['total_estimated_cost']:.2f}")
+                print(
+                    f"Avg Execution:      {prefetch_stats['avg_execution_time']:.2f}s"
+                )
+                print(
+                    f"Total Cost:         ${prefetch_stats['total_estimated_cost']:.2f}"
+                )
                 print(f"Current Hour Cost:  ${prefetch_stats['current_hour_cost']:.2f}")
                 print(f"Active Prefetches:  {prefetch_stats['active_prefetches']}")
                 print(f"Queue Size:         {prefetch_stats['queue_size']}")
-                print(f"Status:             {'🟢 Running' if prefetch_stats['running'] else '🔴 Stopped'}")
-                
-                if prefetch_stats['trigger_stats']:
+                print(
+                    f"Status:             {'🟢 Running' if prefetch_stats['running'] else '🔴 Stopped'}"
+                )
+
+                if prefetch_stats["trigger_stats"]:
                     print("\nTrigger Performance:")
-                    for reason, stats in prefetch_stats['trigger_stats'].items():
-                        success_rate = stats['successful'] / stats['total'] if stats['total'] > 0 else 0
-                        print(f"  {reason}: {stats['successful']}/{stats['total']} ({success_rate:.1%})")
-            
+                    for reason, stats in prefetch_stats["trigger_stats"].items():
+                        success_rate = (
+                            stats["successful"] / stats["total"]
+                            if stats["total"] > 0
+                            else 0
+                        )
+                        print(
+                            f"  {reason}: {stats['successful']}/{stats['total']} ({success_rate:.1%})"
+                        )
+
             if args.patterns:
                 # Show learned patterns (top 10)
                 print("\n🧠 Top Learned Patterns:")
                 print("-" * 40)
-                sorted_patterns = sorted(cache.behavioral_analyzer.patterns.items(), 
-                                       key=lambda x: x[1].frequency, reverse=True)[:10]
+                sorted_patterns = sorted(
+                    cache.behavioral_analyzer.patterns.items(),
+                    key=lambda x: x[1].frequency,
+                    reverse=True,
+                )[:10]
                 for i, (pattern_hash, pattern) in enumerate(sorted_patterns, 1):
                     sequence_preview = " → ".join(pattern.sequence[:3])
                     if len(pattern.sequence) > 3:
                         sequence_preview += "..."
                     print(f"{i:2}. {sequence_preview}")
-                    print(f"    Frequency: {pattern.frequency}, Success: {pattern.success_rate:.1%}")
-            
+                    print(
+                        f"    Frequency: {pattern.frequency}, Success: {pattern.success_rate:.1%}"
+                    )
+
             if args.export:
                 # Export analytics to file
-                all_analytics = {
-                    'behavioral': analytics,
-                    'timestamp': time.time()
-                }
+                all_analytics = {"behavioral": analytics, "timestamp": time.time()}
                 if cache.predictive_prefetcher:
-                    all_analytics['prefetch'] = cache.predictive_prefetcher.get_prefetch_stats()
-                
+                    all_analytics["prefetch"] = (
+                        cache.predictive_prefetcher.get_prefetch_stats()
+                    )
+
                 import json
-                with open(args.export, 'w') as f:
+
+                with open(args.export, "w") as f:
                     json.dump(all_analytics, f, indent=2)
                 print(f"✅ Analytics exported to {args.export}")
-                
+
         elif args.command == "predict":
-            if not hasattr(cache, 'behavioral_analyzer') or not cache.behavioral_analyzer:
-                print("❌ Prediction not available. Enhanced cache with behavioral learning required.")
+            if (
+                not hasattr(cache, "behavioral_analyzer")
+                or not cache.behavioral_analyzer
+            ):
+                print(
+                    "❌ Prediction not available. Enhanced cache with behavioral learning required."
+                )
                 return
-            
+
             # Parse context
             context = {}
             if args.context:
@@ -638,19 +796,21 @@ if __name__ == "__main__":
                     context = json.loads(args.context)
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context: {args.context}")
-            
+
             # Get predictions
-            recent_queries = [cache.behavioral_analyzer._get_query_hash(args.query, context)]
+            recent_queries = [
+                cache.behavioral_analyzer._get_query_hash(args.query, context)
+            ]
             predictions = cache.behavioral_analyzer.predict_next_queries(
                 user_id=cache.current_user_id,
                 session_id=cache.current_session_id or "predict-session",
                 recent_queries=recent_queries,
-                context=context
+                context=context,
             )
-            
+
             print(f"🔮 Predictions for: {args.query}")
             print("-" * 50)
-            
+
             if predictions:
                 for i, (query_hash, confidence) in enumerate(predictions, 1):
                     if confidence >= args.confidence:
@@ -658,12 +818,17 @@ if __name__ == "__main__":
                         print(f"   Confidence: {confidence:.2%}")
             else:
                 print("No predictions found above confidence threshold.")
-                
+
         elif args.command == "prefetch":
-            if not hasattr(cache, 'predictive_prefetcher') or not cache.predictive_prefetcher:
-                print("❌ Prefetch not available. Enhanced cache with behavioral learning required.")
+            if (
+                not hasattr(cache, "predictive_prefetcher")
+                or not cache.predictive_prefetcher
+            ):
+                print(
+                    "❌ Prefetch not available. Enhanced cache with behavioral learning required."
+                )
                 return
-            
+
             # Parse context
             context = {}
             if args.context:
@@ -671,14 +836,14 @@ if __name__ == "__main__":
                     context = json.loads(args.context)
                 except json.JSONDecodeError:
                     print(f"Warning: Invalid JSON context: {args.context}")
-            
+
             # Schedule prefetch
-            asyncio.run(cache.predictive_prefetcher.force_prefetch(
-                query=args.query,
-                context=context,
-                priority=args.priority
-            ))
-            
+            asyncio.run(
+                cache.predictive_prefetcher.force_prefetch(
+                    query=args.query, context=context, priority=args.priority
+                )
+            )
+
             print(f"🚀 Prefetch scheduled for: {args.query}")
             print(f"   Priority: {args.priority}")
             print(f"   Context: {context}")
@@ -686,12 +851,16 @@ if __name__ == "__main__":
             brain_manager = BrainStateManager()
             try:
                 import asyncio
+
                 asyncio.run(brain_manager.init_db())
             except RuntimeError:
                 # Event loop is already running, try to handle gracefully
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(lambda: asyncio.run(brain_manager.init_db()))
+                    future = executor.submit(
+                        lambda: asyncio.run(brain_manager.init_db())
+                    )
                     future.result()
 
             # Initialize continuation manager and link to brain manager
@@ -702,15 +871,24 @@ if __name__ == "__main__":
             except RuntimeError:
                 # Event loop is already running, try to handle gracefully
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = executor.submit(lambda: asyncio.run(continuation_manager.init_db()))
+                    future = executor.submit(
+                        lambda: asyncio.run(continuation_manager.init_db())
+                    )
                     future.result()
-                    future = executor.submit(lambda: asyncio.run(continuation_manager.set_brain_manager(brain_manager)))
+                    future = executor.submit(
+                        lambda: asyncio.run(
+                            continuation_manager.set_brain_manager(brain_manager)
+                        )
+                    )
                     future.result()
 
             if args.brain_command == "init":
                 # Initialize a new brain session
-                session = asyncio.run(brain_manager.create_new_session(args.project_id, args.name))
+                session = asyncio.run(
+                    brain_manager.create_new_session(args.project_id, args.name)
+                )
                 print(f"🧠 Brain session initialized: {session.session_id}")
                 print(f"   Project: {session.project_id}")
 
@@ -733,29 +911,33 @@ if __name__ == "__main__":
                     print(f"   Active Provider: {context.active_ai_provider}")
                     print(f"   Working Directory: {context.current_working_directory}")
                     print(f"   Related Files: {len(context.relevant_files)} files")
-                    print(f"   Conversation History: {len(context.conversation_history)} exchanges")
+                    print(
+                        f"   Conversation History: {len(context.conversation_history)} exchanges"
+                    )
                 else:
-                    print("No active brain session. Initialize one first with 'aicache brain init'.")
+                    print(
+                        "No active brain session. Initialize one first with 'aicache brain init'."
+                    )
 
             elif args.brain_command == "concepts":
                 if args.concepts_command == "add":
-                    concept_id = asyncio.run(brain_manager.add_concept(
-                        args.content,
-                        args.provider,
-                        args.tags,
-                        args.importance
-                    ))
+                    concept_id = asyncio.run(
+                        brain_manager.add_concept(
+                            args.content, args.provider, args.tags, args.importance
+                        )
+                    )
                     print(f"💡 Added concept to brain: {concept_id[:8]}...")
 
                 elif args.concepts_command == "search":
-                    concepts = asyncio.run(brain_manager.get_relevant_concepts(
-                        args.query,
-                        args.limit
-                    ))
+                    concepts = asyncio.run(
+                        brain_manager.get_relevant_concepts(args.query, args.limit)
+                    )
                     if concepts:
                         print(f"💡 Found {len(concepts)} relevant concepts:")
                         for i, concept in enumerate(concepts, 1):
-                            print(f"  {i}. ({concept.importance_score:.2f}) {concept.content[:100]}...")
+                            print(
+                                f"  {i}. ({concept.importance_score:.2f}) {concept.content[:100]}..."
+                            )
                             print(f"     Providers: {', '.join(concept.ai_providers)}")
                             print()
                     else:
@@ -764,12 +946,14 @@ if __name__ == "__main__":
             elif args.brain_command == "continuation":
                 if args.continuation_command == "create":
                     # Create a continuation package
-                    package_id = asyncio.run(continuation_manager.create_continuation_package(
-                        args.source_session_id,
-                        args.target_llm,
-                        max_conversation_length=args.max_conversation_length,
-                        max_concepts=args.max_concepts
-                    ))
+                    package_id = asyncio.run(
+                        continuation_manager.create_continuation_package(
+                            args.source_session_id,
+                            args.target_llm,
+                            max_conversation_length=args.max_conversation_length,
+                            max_concepts=args.max_concepts,
+                        )
+                    )
                     if package_id:
                         print(f"🔄 Created continuation package: {package_id}")
                         print(f"   Source session: {args.source_session_id}")
@@ -779,44 +963,63 @@ if __name__ == "__main__":
 
                 elif args.continuation_command == "apply":
                     # Apply a continuation package to a session
-                    success = asyncio.run(continuation_manager.apply_continuation_package(
-                        args.package_id,
-                        args.target_session_id
-                    ))
+                    success = asyncio.run(
+                        continuation_manager.apply_continuation_package(
+                            args.package_id, args.target_session_id
+                        )
+                    )
                     if success:
-                        print(f"🔄 Applied continuation package {args.package_id} to session {args.target_session_id}")
+                        print(
+                            f"🔄 Applied continuation package {args.package_id} to session {args.target_session_id}"
+                        )
                     else:
-                        print(f"❌ Failed to apply continuation package {args.package_id}")
+                        print(
+                            f"❌ Failed to apply continuation package {args.package_id}"
+                        )
 
                 elif args.continuation_command == "search":
                     # Search for relevant continuation packages
-                    results = asyncio.run(continuation_manager.search_continuation_packages(
-                        args.query,
-                        target_llm=args.target_llm,
-                        limit=args.limit
-                    ))
+                    results = asyncio.run(
+                        continuation_manager.search_continuation_packages(
+                            args.query, target_llm=args.target_llm, limit=args.limit
+                        )
+                    )
                     if results:
-                        print(f"🔄 Found {len(results)} relevant continuation packages:")
+                        print(
+                            f"🔄 Found {len(results)} relevant continuation packages:"
+                        )
                         for i, (package, score) in enumerate(results, 1):
-                            print(f"  {i}. Score: {score:.3f} | Package: {package.package_id[:8]}...")
-                            print(f"     Source: {package.source_session_id[:8]}... → Target: {package.target_llm}")
+                            print(
+                                f"  {i}. Score: {score:.3f} | Package: {package.package_id[:8]}..."
+                            )
+                            print(
+                                f"     Source: {package.source_session_id[:8]}... → Target: {package.target_llm}"
+                            )
                             print(f"     Task: {package.current_task or 'N/A'}")
                             print(f"     Time: {package.timestamp}")
                     else:
-                        print(f"❌ No relevant continuation packages found for: {args.query}")
+                        print(
+                            f"❌ No relevant continuation packages found for: {args.query}"
+                        )
 
                 elif args.continuation_command == "list":
                     # List continuation packages
-                    packages = asyncio.run(continuation_manager.list_packages(
-                        target_llm=args.target_llm,
-                        source_session_id=getattr(args, 'source_session_id', None),
-                        limit=args.limit
-                    ))
+                    packages = asyncio.run(
+                        continuation_manager.list_packages(
+                            target_llm=args.target_llm,
+                            source_session_id=getattr(args, "source_session_id", None),
+                            limit=args.limit,
+                        )
+                    )
                     if packages:
-                        print(f"🔄 Available continuation packages ({len(packages)} total):")
+                        print(
+                            f"🔄 Available continuation packages ({len(packages)} total):"
+                        )
                         for pkg in packages:
                             print(f"  ID: {pkg['package_id'][:8]}...")
-                            print(f"    Source: {pkg['source_session_id'][:8]}... | Target: {pkg['target_llm']}")
+                            print(
+                                f"    Source: {pkg['source_session_id'][:8]}... | Target: {pkg['target_llm']}"
+                            )
                             print(f"    Task: {pkg['current_task'] or 'N/A'}")
                             print(f"    Time: {pkg['timestamp_readable']}")
                             print()
@@ -825,7 +1028,9 @@ if __name__ == "__main__":
 
                 elif args.continuation_command == "inspect":
                     # Inspect a specific continuation package
-                    package = asyncio.run(continuation_manager.load_continuation_package(args.package_id))
+                    package = asyncio.run(
+                        continuation_manager.load_continuation_package(args.package_id)
+                    )
                     if package:
                         print(f"🔄 Continuation Package: {package.package_id}")
                         print(f"   Source Session: {package.source_session_id}")
@@ -833,33 +1038,44 @@ if __name__ == "__main__":
                         print(f"   Target LLM: {package.target_llm}")
                         print(f"   Creation Time: {package.timestamp}")
                         print(f"   Current Task: {package.current_task}")
-                        print(f"   Project: {package.project_context.get('name', 'N/A') if package.project_context else 'N/A'}")
+                        print(
+                            f"   Project: {package.project_context.get('name', 'N/A') if package.project_context else 'N/A'}"
+                        )
                         print(f"   Concepts: {len(package.summary_concepts)}")
-                        print(f"   Conversation Turns: {len(package.recent_conversation)}")
+                        print(
+                            f"   Conversation Turns: {len(package.recent_conversation)}"
+                        )
                         print(f"   Relevant Files: {len(package.relevant_files)}")
                     else:
                         print(f"❌ Continuation package not found: {args.package_id}")
 
             elif args.brain_command == "stats":
                 if args.project_id:
-                    stats = asyncio.run(brain_manager.get_project_stats(args.project_id))
+                    stats = asyncio.run(
+                        brain_manager.get_project_stats(args.project_id)
+                    )
                     print(f"📊 Stats for project {args.project_id}:")
                     print(f"   Total sessions: {stats['total_sessions']}")
                     print(f"   Total interactions: {stats['total_interactions']}")
                     print(f"   Total concepts: {stats['total_concepts']}")
-                    print(f"   Avg concept importance: {stats['avg_concept_importance']:.2f}")
+                    print(
+                        f"   Avg concept importance: {stats['avg_concept_importance']:.2f}"
+                    )
                     print(f"   AI providers used: {stats['unique_ai_providers']}")
                 else:
                     active_sessions = asyncio.run(brain_manager.get_active_sessions())
                     print(f"📊 Active brain sessions: {len(active_sessions)}")
                     for session in active_sessions:
-                        print(f"   - {session.session_id[:8]}... for {session.project_id}")
+                        print(
+                            f"   - {session.session_id[:8]}... for {session.project_id}"
+                        )
                         print(f"     Providers: {', '.join(session.ai_providers_used)}")
                         print(f"     Interactions: {session.total_interactions}")
             else:
                 print("Invalid brain command. Use 'aicache brain --help' for options.")
         else:
             parser.print_help()
+
 
 if __name__ == "__main__":
     main()
