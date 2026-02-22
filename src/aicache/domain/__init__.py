@@ -30,6 +30,16 @@ from .services import (
     CacheInvalidationService,
     CacheTTLService,
 )
+from .prompt_caching import (
+    PromptCachePort,
+    OpenAIPromptCacheAdapter,
+    AnthropicPromptCacheAdapter,
+    GooglePromptCacheAdapter,
+    MultiProviderPromptCachePort,
+    CacheProvider,
+    PromptCacheConfig,
+    PromptCacheResult,
+)
 
 __all__ = [
     # Models
@@ -59,4 +69,13 @@ __all__ = [
     "CacheEvictionService",
     "CacheInvalidationService",
     "CacheTTLService",
+    # Prompt Caching (2026)
+    "PromptCachePort",
+    "OpenAIPromptCacheAdapter",
+    "AnthropicPromptCacheAdapter",
+    "GooglePromptCacheAdapter",
+    "MultiProviderPromptCachePort",
+    "CacheProvider",
+    "PromptCacheConfig",
+    "PromptCacheResult",
 ]
