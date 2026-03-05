@@ -489,71 +489,66 @@ complete -F _aicache_completions aicache
             if stats.get("num_expired", 0) > 0:
                 print(f"  Expired entries: {stats['num_expired']}")
         elif args.command == "create-generic-wrapper":
-            # Generate the content of the generic wrapper script
-            wrapper_content = f"""#!/usr/bin/env python3
+            # Validate inputs to prevent code injection
+            import re as _re
+            if not _re.match(r'^[a-zA-Z0-9_-]+$', args.cli_name):
+                print("Error: cli_name must contain only alphanumeric characters, hyphens, and underscores.", file=sys.stderr)
+                sys.exit(1)
+            if not os.path.isabs(args.path) and not _re.match(r'^[a-zA-Z0-9_./-]+$', args.path):
+                print("Error: path contains invalid characters.", file=sys.stderr)
+                sys.exit(1)
+
+            # Store config as JSON instead of interpolating into source code
+            config = {
+                "cli_name": args.cli_name,
+                "real_cli_path": args.path,
+                "prompt_regex": args.prompt_regex,
+                "model_arg": args.model_arg if args.model_arg != "None" else None,
+            }
+
+            wrapper_content = '''#!/usr/bin/env python3
 
 import shutil
 import re
 import sys
 import os
+import json
 from pathlib import Path
 
-# Add the src directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
 from aicache.core import Cache
-from aicache.plugins.base import CLIWrapper as BaseCLIWrapper # Import BaseCLIWrapper
 
-class CustomCLIWrapper:
-    def __init__(self):
-        self.cli_name = \"{args.cli_name}\" # Corrected: escaped '"'
-        self.real_cli_path = \"{args.path}\" # Corrected: escaped '"'
-        self.prompt_regex = r\"{args.prompt_regex}\" # Corrected: escaped '"'
-        self.model_arg = \"{args.model_arg}\" if \"{args.model_arg}\" != \"None\" else None # Corrected: escaped '"'
+# Load config from companion JSON file
+config_path = Path(__file__).with_suffix('.json')
+with open(config_path, 'r') as f:
+    config = json.load(f)
 
-    def get_cli_name() -> str:
-        return self.cli_name
+CLI_NAME = config["cli_name"]
+REAL_CLI_PATH = config["real_cli_path"]
+PROMPT_REGEX = config["prompt_regex"]
+MODEL_ARG = config.get("model_arg")
 
-    def parse_arguments(self, args: list) -> tuple[str, dict]:
-        prompt_content = ""
-        model = None
 
-        # Extract prompt using regex
-        args_str = " ".join(args)
-        match = re.search(self.prompt_regex, args_str)
-        if match:
-            prompt_content = match.group(1)
+def parse_arguments(args):
+    prompt_content = ""
+    model = None
+    args_str = " ".join(args)
+    match = re.search(PROMPT_REGEX, args_str)
+    if match:
+        prompt_content = match.group(1)
+    if MODEL_ARG:
+        for i, arg in enumerate(args):
+            if arg == MODEL_ARG and i + 1 < len(args):
+                model = args[i + 1]
+                break
+    return prompt_content, {"model": model}
 
-        # Extract model if model_arg is provided
-        if self.model_arg:
-            i = 0
-            while i < len(args):
-                if args[i] == self.model_arg:
-                    if i + 1 < len(args):
-                        model = args[i+1]
-                        break
-                    else:
-                        i += 1
-                else:
-                    i += 1
 
-        context = {{'model': model}}
-        return prompt_content, context
-
-    async def execute_cli(self, args: list) -> tuple[str, int, str]:
-        if not shutil.which(self.real_cli_path):
-            return "", 1, f"Error: {{self.real_cli_path}} executable not found."
-
-        # Use the _run_cli_command from the BaseCLIWrapper
-        base_wrapper_instance = BaseCLIWrapper()
-        return await base_wrapper_instance._run_cli_command(self.real_cli_path, args)
-
-# Main execution logic for the generated wrapper
-def generated_wrapper_main(): # Renamed to avoid conflict with main()
-    wrapper = CustomCLIWrapper()
+def main():
+    import subprocess
     args = sys.argv[1:]
-
-    prompt_content, context = wrapper.parse_arguments(args)
+    prompt_content, context = parse_arguments(args)
 
     cache = Cache()
     cached_response = cache.get(prompt_content, context)
@@ -564,21 +559,29 @@ def generated_wrapper_main(): # Renamed to avoid conflict with main()
         sys.exit(0)
     else:
         print("--- (aicache MISS) ---", file=sys.stderr)
-        stdout, return_code, stderr = wrapper.execute_cli(args)
-        if return_code == 0:
-            cache.set(prompt_content, stdout, context)
-            print(stdout)
-        if stderr:
-            print(stderr, file=sys.stderr)
-        sys.exit(return_code)
+        result = subprocess.run(
+            [REAL_CLI_PATH] + args,
+            capture_output=True, text=True
+        )
+        if result.returncode == 0 and prompt_content:
+            cache.set(prompt_content, result.stdout, context)
+        print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, file=sys.stderr, end="")
+        sys.exit(result.returncode)
+
 
 if __name__ == "__main__":
-    generated_wrapper_main() # Call the renamed main function
-"""
-            # Write the wrapper content to a file
+    main()
+'''
+            # Write the wrapper and its config
             output_dir = Path.cwd() / "custom_wrappers"
             output_dir.mkdir(exist_ok=True)
             output_file = output_dir / f"{args.cli_name}_wrapper.py"
+            config_file = output_dir / f"{args.cli_name}_wrapper.json"
+
+            with open(config_file, "w") as f:
+                json.dump(config, f, indent=2)
             with open(output_file, "w") as f:
                 f.write(wrapper_content)
 

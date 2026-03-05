@@ -8,7 +8,7 @@ import logging
 import hashlib
 import json
 from typing import Dict, Any, Optional, List, Tuple
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 
 from .llm_service import LLMService
 

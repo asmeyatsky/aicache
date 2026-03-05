@@ -2,10 +2,21 @@
 Plugin system for aicache CLI wrappers.
 """
 
+"""
+DEPRECATED: Use the plugins/ package instead.
+This module is kept for backward compatibility and will be removed in 0.3.0.
+"""
+
+import warnings
 from typing import Dict, Type
 from abc import ABC, abstractmethod
 import asyncio
-import subprocess
+
+warnings.warn(
+    "aicache.plugins (module) is deprecated. Use the aicache.plugins package instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 class CLIWrapper(ABC):
     """Base class for CLI wrappers."""

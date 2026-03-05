@@ -861,6 +861,197 @@ def config_validate():
             console.print(f"  • {warning}")
 
 
+@cli.group()
+def provider():
+    """LLM provider prompt caching management"""
+    pass
+
+
+@provider.command("list")
+def provider_list():
+    """List configured LLM providers and their cache status"""
+    from .application.prompt_cache_service import PromptCacheService
+
+    service = PromptCacheService()
+    providers = service.get_provider_info()
+
+    table = Table(show_header=True, header_style="bold blue", box=box.ROUNDED)
+    table.add_column("Provider", width=12)
+    table.add_column("Status", width=12)
+    table.add_column("Auto Cache", width=10)
+    table.add_column("Min Tokens", justify="right", width=10)
+    table.add_column("TTL", justify="right", width=8)
+    table.add_column("Queries", justify="right", width=8)
+    table.add_column("Hits", justify="right", width=6)
+    table.add_column("Tokens Saved", justify="right", width=12)
+
+    for p in providers:
+        status = "[green]Active[/green]" if p["active"] else "[dim]Ready[/dim]"
+        auto = "[green]Yes[/green]" if p["auto_cache"] else "[yellow]Manual[/yellow]"
+        ttl_str = f"{p['ttl_seconds'] // 60}m"
+        table.add_row(
+            p["name"],
+            status,
+            auto,
+            str(p["min_tokens"]),
+            ttl_str,
+            str(p["queries"]),
+            str(p["hits"]),
+            f"{p['tokens_saved']:,}",
+        )
+
+    console.print(table)
+    console.print(f"\n[dim]Active provider: {service.current_provider}[/dim]")
+
+
+@provider.command("set")
+@click.argument("name", type=click.Choice(["openai", "anthropic", "google"]))
+def provider_set(name):
+    """Set the active LLM provider"""
+    from .application.prompt_cache_service import PromptCacheService
+
+    service = PromptCacheService()
+    if service.set_provider(name):
+        config = service.get_provider_config()
+        console.print(f"Active provider: [bold]{name}[/bold]")
+        console.print(f"  Auto cache: {'Yes' if config.auto_cache_enabled else 'No (manual prefix required)'}")
+        console.print(f"  Min tokens: {config.cache_min_tokens}")
+        console.print(f"  Cache TTL: {config.cache_ttl_seconds // 60} minutes")
+    else:
+        console.print(f"[red]Unknown provider: {name}[/red]")
+
+
+@provider.command("info")
+@click.argument("name", type=click.Choice(["openai", "anthropic", "google"]), required=False)
+def provider_info(name):
+    """Show detailed provider caching information"""
+    from .application.prompt_cache_service import PromptCacheService
+    from .domain.prompt_caching import CacheProvider
+
+    service = PromptCacheService()
+
+    if name:
+        service.set_provider(name)
+
+    config = service.get_provider_config()
+    provider_name = service.current_provider
+
+    details = {
+        "openai": (
+            "OpenAI implements [bold]automatic[/bold] prompt caching.\n"
+            "When 1024+ tokens are shared between requests, caching activates automatically.\n"
+            "Cache persists for 24 hours. [green]50% cost reduction[/green] on cached tokens."
+        ),
+        "anthropic": (
+            "Anthropic requires [bold]explicit[/bold] cache prefix specification.\n"
+            "Mark cacheable content with cache_control breakpoints.\n"
+            "Cache persists for 5-10 minutes. [green]Up to 90% cost reduction[/green] on cached tokens."
+        ),
+        "google": (
+            "Google Gemini supports [bold]implicit and explicit[/bold] caching.\n"
+            "Context caching works automatically for large prompts.\n"
+            "Configurable TTL. [green]50-75% cost reduction[/green] on cached tokens."
+        ),
+    }
+
+    console.print(
+        Panel.fit(
+            f"""[bold]{provider_name.upper()} Prompt Caching[/bold]
+
+{details.get(provider_name, 'No details available.')}
+
+[bold]Configuration:[/bold]
+  Min tokens for caching: {config.cache_min_tokens}
+  Cache TTL: {config.cache_ttl_seconds // 60} minutes
+  Auto cache: {'Enabled' if config.auto_cache_enabled else 'Disabled (manual)'}""",
+            title=f"Provider: {provider_name}",
+            border_style="blue",
+        )
+    )
+
+
+@cli.command()
+@click.option("--days", default=30, help="Report period in days")
+@click.option("--json-output", "json_out", is_flag=True, help="Output as JSON")
+def report(days, json_out):
+    """Generate cost savings report across all providers"""
+    from .application.prompt_cache_service import PromptCacheService
+
+    service = PromptCacheService()
+    report_data = service.get_savings_report(days=days)
+
+    if json_out:
+        console.print(json.dumps(report_data, indent=2))
+        return
+
+    # Header
+    console.print(
+        Panel.fit(
+            f"""[bold]Cost Savings Report - Last {days} Days[/bold]
+
+[bold]Overall Performance[/bold]
+  Total Queries:      {report_data['total_queries']:,}
+  Cache Hits:         {report_data['total_hits']:,}
+  Hit Rate:           {report_data['hit_rate_percent']:.1f}%
+  Tokens Saved:       {report_data['total_tokens_saved']:,}
+
+[bold green]Estimated Savings[/bold green]
+  This Period:        ${report_data['total_estimated_savings']:.4f}
+  Monthly Projection: ${report_data['monthly_projection']:.2f}
+
+[bold]All-Time[/bold]
+  Total Queries:      {report_data['all_time']['queries']:,}
+  Total Hits:         {report_data['all_time']['hits']:,}
+  Total Tokens Saved: {report_data['all_time']['tokens_saved']:,}""",
+            title="Cost Savings Report",
+            border_style="green",
+        )
+    )
+
+    # Per-provider breakdown
+    if report_data["by_provider"]:
+        table = Table(
+            show_header=True, header_style="bold blue", box=box.ROUNDED,
+            title="By Provider"
+        )
+        table.add_column("Provider", width=12)
+        table.add_column("Queries", justify="right", width=10)
+        table.add_column("Hits", justify="right", width=8)
+        table.add_column("Hit Rate", justify="right", width=8)
+        table.add_column("Tokens Saved", justify="right", width=14)
+        table.add_column("Est. Savings", justify="right", width=12)
+
+        for pname, pdata in report_data["by_provider"].items():
+            table.add_row(
+                pname,
+                str(pdata["queries"]),
+                str(pdata["hits"]),
+                f"{pdata['hit_rate']:.1f}%",
+                f"{pdata['tokens_saved']:,}",
+                f"${pdata['estimated_savings']:.4f}",
+            )
+
+        console.print(table)
+
+    # Daily trend
+    trend = report_data.get("daily_trend", [])
+    if trend:
+        console.print("\n[bold]Recent Daily Trend:[/bold]")
+        for day in trend:
+            hits = day["hits"]
+            queries = day["queries"]
+            rate = (hits / queries * 100) if queries > 0 else 0
+            bar_len = min(int(rate / 5), 20)
+            bar = "[green]" + "█" * bar_len + "[/green]" + "░" * (20 - bar_len)
+            console.print(f"  {day['date']}  {bar} {rate:.0f}% ({hits}/{queries})")
+
+    if report_data["total_queries"] == 0:
+        console.print(
+            "\n[dim]No prompt cache data yet. "
+            "Use 'aicache provider list' to see configured providers.[/dim]"
+        )
+
+
 def main():
     """Entry point for the CLI"""
     try:

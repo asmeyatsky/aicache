@@ -70,7 +70,7 @@ class QueryCacheUseCase:
                     tokens_saved=0,
                     cost_saved=0.0
                 )
-                return CacheResult.hit(exact_result.value, exact_result.entry_key, response_time_ms)
+                return CacheResult.create_hit(exact_result.value, exact_result.entry_key, response_time_ms)
 
             # Step 2: Try semantic match if enabled
             if self.policy.enable_semantic_caching:
@@ -88,11 +88,11 @@ class QueryCacheUseCase:
             # Step 3: Cache miss
             response_time_ms = (time.time() - start_time) * 1000
             await self.metrics.record_miss(query, "not_found")
-            return CacheResult.miss(response_time_ms)
+            return CacheResult.create_miss(response_time_ms)
 
         except Exception as e:
             logger.error(f"Error querying cache: {e}")
-            return CacheResult.miss((time.time() - start_time) * 1000)
+            return CacheResult.create_miss((time.time() - start_time) * 1000)
 
     async def _try_exact_match(self, query: str, context: Optional[Dict[str, Any]]) -> CacheResult:
         """Try to find exact cache match."""
@@ -102,7 +102,7 @@ class QueryCacheUseCase:
 
         entry = await self.storage.get(cache_key)
         if entry is None or entry.is_expired():
-            return CacheResult.miss()
+            return CacheResult.create_miss()
 
         # Refresh TTL if needed
         if self.ttl_service.should_refresh_ttl(entry):
@@ -113,7 +113,7 @@ class QueryCacheUseCase:
         touched_entry = entry.touch()
         await self.storage.set(touched_entry)
 
-        return CacheResult.hit(entry.value, cache_key)
+        return CacheResult.create_hit(entry.value, cache_key)
 
     async def _try_semantic_match(self, query: str) -> CacheResult:
         """Try to find semantic match."""
@@ -123,18 +123,18 @@ class QueryCacheUseCase:
         )
 
         if not semantic_match:
-            return CacheResult.miss()
+            return CacheResult.create_miss()
 
         # Verify the match is still valid
         entry = await self.storage.get(semantic_match.matched_entry_key)
         if entry is None or entry.is_expired():
-            return CacheResult.miss()
+            return CacheResult.create_miss()
 
         # Touch entry for LRU tracking
         touched_entry = entry.touch()
         await self.storage.set(touched_entry)
 
-        return CacheResult.semantic_hit(
+        return CacheResult.create_semantic_hit(
             entry.value,
             semantic_match.matched_entry_key,
             semantic_match.similarity_score,

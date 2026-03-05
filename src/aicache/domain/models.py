@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any
 from enum import Enum
 import hashlib
-import json
 
 
 class InvalidationStrategy(Enum):
@@ -35,8 +34,8 @@ class CacheMetadata:
     accessed_count: int = 0
     last_accessed_at: Optional[datetime] = None
     normalized_query: Optional[str] = None
-    semantic_tags: List[str] = None
-    metadata: Dict[str, Any] = None
+    semantic_tags: Optional[List[str]] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         if self.semantic_tags is None:
@@ -179,13 +178,13 @@ class CacheResult:
     response_time_ms: float = 0.0
 
     @classmethod
-    def hit(cls, value: bytes, entry_key: str, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_hit(cls, value: bytes, entry_key: str, response_time_ms: float = 0.0) -> 'CacheResult':
         """Create a cache hit result."""
         return cls(hit=True, value=value, entry_key=entry_key, response_time_ms=response_time_ms)
 
     @classmethod
-    def semantic_hit(cls, value: bytes, entry_key: str, similarity_score: float,
-                     confidence: float, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_semantic_hit(cls, value: bytes, entry_key: str, similarity_score: float,
+                            confidence: float, response_time_ms: float = 0.0) -> 'CacheResult':
         """Create a semantic cache hit result."""
         return cls(
             hit=True,
@@ -197,7 +196,7 @@ class CacheResult:
         )
 
     @classmethod
-    def miss(cls, response_time_ms: float = 0.0) -> 'CacheResult':
+    def create_miss(cls, response_time_ms: float = 0.0) -> 'CacheResult':
         """Create a cache miss result."""
         return cls(hit=False, response_time_ms=response_time_ms)
 

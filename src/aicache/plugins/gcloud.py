@@ -1,6 +1,5 @@
 import shutil
 import json
-import sys
 from pathlib import Path
 from .base import CLIWrapper
 

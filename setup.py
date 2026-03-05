@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="aicache",
-    version="0.1.0",
+    version="0.2.0",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
     entry_points={
@@ -17,6 +17,7 @@ setup(
         "msgpack",
         "click>=8.0.0",
         "rich>=12.0.0",
+        "pydantic>=2.0.0",
     ],
     extras_require={
         "basic": [

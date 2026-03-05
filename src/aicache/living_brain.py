@@ -22,7 +22,14 @@ except ImportError:
     SQLITE_AVAILABLE = False
 
 from .config import get_config
-from .semantic import SemanticCache, SemanticCacheEntry
+
+try:
+    from .semantic import SemanticCache, SemanticCacheEntry
+    SEMANTIC_AVAILABLE = True
+except ImportError:
+    SEMANTIC_AVAILABLE = False
+    SemanticCache = None
+    SemanticCacheEntry = None
 
 logger = logging.getLogger(__name__)
 

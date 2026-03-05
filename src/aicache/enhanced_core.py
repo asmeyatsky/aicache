@@ -223,7 +223,7 @@ class ProjectDetector:
                         return 'nextjs'
                     elif 'nuxt' in deps:
                         return 'nuxtjs'
-            except:
+            except (json.JSONDecodeError, IOError, OSError, KeyError):
                 pass
         return 'javascript'
     
@@ -242,7 +242,7 @@ class ProjectDetector:
                     content = f.read()
                     if 'fastapi' in content.lower():
                         return 'fastapi'
-            except:
+            except (IOError, OSError):
                 pass
         return 'python'
     
@@ -582,7 +582,7 @@ class EnhancedCache:
             except zlib.error:
                 # If decompression fails, treat as uncompressed data
                 unpacked = data
-            return msgpack.unpackb(unpacked, raw=False)
+            return msgpack.unpackb(unpacked, raw=False, max_str_len=50*1024*1024, max_bin_len=50*1024*1024, max_array_len=1000000, max_map_len=1000000)
         except Exception as e:
             logger.error(f"Deserialization error: {e}")
             return None
@@ -1076,10 +1076,12 @@ class EnhancedCache:
                 ORDER BY priority_score DESC, last_accessed DESC
             '''
             
+            params = []
             if limit:
-                query += f' LIMIT {limit}'
-            
-            cursor = await conn.execute(query)
+                query += ' LIMIT ?'
+                params.append(int(limit))
+
+            cursor = await conn.execute(query, params)
             rows = await cursor.fetchall()
             entries = []
             

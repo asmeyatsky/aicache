@@ -8,11 +8,14 @@ heavy ML dependencies. Use this for simple exact-match caching.
 import os
 import json
 import hashlib
+import logging
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,7 +74,7 @@ class CoreCache:
             with open(self._index_file, "w") as f:
                 json.dump(self._index, f)
         except IOError:
-            pass  # Fail silently on write errors
+            logger.warning("Failed to save cache index")
 
     def _get_cache_key(
         self, prompt: str, context: Optional[Dict[str, Any]] = None
@@ -85,8 +88,11 @@ class CoreCache:
         return hasher.hexdigest()
 
     def _get_cache_file(self, cache_key: str) -> Path:
-        """Get cache file path for key."""
-        return self.cache_dir / f"{cache_key}.json"
+        """Get cache file path for key, with path traversal protection."""
+        cache_file = (self.cache_dir / f"{cache_key}.json").resolve()
+        if not str(cache_file).startswith(str(self.cache_dir.resolve())):
+            raise ValueError(f"Invalid cache key: path traversal detected")
+        return cache_file
 
     def get(
         self, prompt: str, context: Optional[Dict[str, Any]] = None
@@ -163,7 +169,7 @@ class CoreCache:
                 self.delete(cache_key)
                 return None
 
-            return data
+            return entry.value
 
         except (json.JSONDecodeError, IOError, TypeError):
             self.delete(cache_key)
@@ -186,16 +192,6 @@ class CoreCache:
                 # We don't have prompt stored, but we can derive something
                 if "prompt" not in data:
                     data["prompt"] = ""  # Placeholder
-                return data
-        except (json.JSONDecodeError, IOError):
-            return None
-
-        try:
-            with open(cache_file, "r") as f:
-                data = json.load(f)
-                # Add backward compatibility keys
-                if "value" in data:
-                    data["response"] = data["value"]
                 return data
         except (json.JSONDecodeError, IOError):
             return None
@@ -284,7 +280,7 @@ class CoreCache:
             self._save_index()
 
         except IOError:
-            pass  # Fail silently on write errors
+            logger.warning(f"Failed to write cache entry: {cache_key}")
 
     def delete(self, cache_key: str) -> bool:
         """Delete a cache entry by key."""
@@ -354,7 +350,7 @@ class CoreCache:
                         with open(cache_file, "r") as f:
                             file_data = json.load(f)
                             prompt = file_data.get("prompt", prompt)
-                    except:
+                    except (json.JSONDecodeError, IOError, OSError):
                         pass
 
                     entry_data = {

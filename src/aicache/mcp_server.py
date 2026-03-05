@@ -146,7 +146,7 @@ class MCPConnection:
         Returns:
             List of cache entries
         """
-        entries = self.cache.list(limit=limit)
+        entries = self.cache.list(limit=limit, verbose=True)
 
         if verbose:
             return {"entries": entries, "total": len(entries)}
@@ -390,10 +390,17 @@ class MCPConnection:
             return {"error": f"Unknown tool: {name}"}
 
         try:
-            result = handlers[name](**arguments)
+            # Validate arguments against handler's expected parameters
+            import inspect
+            handler = handlers[name]
+            sig = inspect.signature(handler)
+            valid_params = set(sig.parameters.keys())
+            filtered_args = {k: v for k, v in arguments.items() if k in valid_params}
+            result = handler(**filtered_args)
             return {"content": [{"type": "text", "text": json.dumps(result)}]}
         except Exception as e:
-            return {"error": str(e)}
+            logger.error(f"Error in tool call '{name}': {e}")
+            return {"error": "Internal error processing tool call"}
 
     def handle_request(self, request: MCPRequest) -> MCPResponse:
         """Handle incoming MCP request"""
@@ -424,7 +431,7 @@ class MCPConnection:
         except Exception as e:
             logger.error(f"Error handling request: {e}")
             return MCPResponse(
-                id=request.id, error={"code": "internal_error", "message": str(e)}
+                id=request.id, error={"code": "internal_error", "message": "Internal server error"}
             )
 
 

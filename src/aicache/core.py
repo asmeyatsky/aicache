@@ -1,9 +1,24 @@
+"""
+DEPRECATED: Use core.cache.CoreCache instead.
+This module is kept for backward compatibility and will be removed in 0.3.0.
+"""
+
 import os
 import hashlib
 import json
+import logging
 import time
+import warnings
 from pathlib import Path
 from .config import get_config
+
+logger = logging.getLogger(__name__)
+
+warnings.warn(
+    "aicache.core.Cache is deprecated. Use aicache.core.cache.CoreCache instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 class Cache:
     def __init__(self, cache_dir=None):
@@ -12,12 +27,11 @@ class Cache:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-    def _get_cache_key(self, prompt, context=None):
+    def _get_cache_key(self, prompt: str, context: dict = None) -> str:
         """Creates a unique, deterministic cache key from the prompt and context."""
         hasher = hashlib.sha256()
         hasher.update(prompt.encode('utf-8'))
         if context:
-            # Sort context dict by key for consistent hash
             sorted_context = json.dumps(context, sort_keys=True)
             hasher.update(sorted_context.encode('utf-8'))
         return hasher.hexdigest()
@@ -74,8 +88,11 @@ class Cache:
             if f.is_file():
                 f.unlink()
 
-    def inspect(self, cache_key):
+    def inspect(self, cache_key: str):
         """Inspects a specific cache entry by its key."""
+        cache_file = (self.cache_dir / cache_key).resolve()
+        if not str(cache_file).startswith(str(self.cache_dir.resolve())):
+            raise ValueError("Invalid cache key: path traversal detected")
         cache_file = self.cache_dir / cache_key
         if cache_file.exists():
             with open(cache_file, 'r') as f:
@@ -85,8 +102,11 @@ class Cache:
                     return {"error": "Invalid JSON"}
         return None
 
-    def delete(self, cache_key):
+    def delete(self, cache_key: str):
         """Deletes a specific cache entry by its key."""
+        cache_file = (self.cache_dir / cache_key).resolve()
+        if not str(cache_file).startswith(str(self.cache_dir.resolve())):
+            raise ValueError("Invalid cache key: path traversal detected")
         cache_file = self.cache_dir / cache_key
         if cache_file.exists() and cache_file.is_file():
             cache_file.unlink()
@@ -95,8 +115,6 @@ class Cache:
 
     def prune(self, max_age_days=None, max_size_mb=None):
         """Removes cache entries based on the configured or passed eviction policy."""
-        # Import here to avoid circular import issues
-        from .config import get_config
         config = get_config()
         
         # Use passed parameters or fall back to config values
@@ -121,9 +139,9 @@ class Cache:
                     continue
 
         if max_size_mb is not None and max_size_mb > 0:
-            print(f"Max size (MB): {max_size_mb}")
+            logger.debug(f"Max size (MB): {max_size_mb}")
             total_size = self.stats()['total_size']
-            print(f"Total size: {total_size}")
+            logger.debug(f"Total size: {total_size}")
             if total_size > max_size_mb * 1024 * 1024:
                 # Get all cache files and sort them by timestamp (oldest first)
                 files = sorted(self.cache_dir.iterdir(), key=lambda f: f.stat().st_mtime)
@@ -134,7 +152,7 @@ class Cache:
                     total_size -= file_to_delete.stat().st_size
                     file_to_delete.unlink()
                     pruned_count += 1
-                    print(f"Deleted {file_to_delete}")
+                    logger.debug(f"Deleted {file_to_delete}")
 
         return pruned_count
 

@@ -40,6 +40,7 @@ from .domain.ports import (
     CacheMetricsPort,
     EmbeddingGeneratorPort,
     RepositoryPort,
+    TOONRepositoryPort,
 )
 
 # Configuration

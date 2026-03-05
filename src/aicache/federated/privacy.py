@@ -243,11 +243,19 @@ class SecureMPC:
             
         return result_shares
 
-# Homomorphic encryption utilities (simplified implementation)
+# Homomorphic encryption utilities (DEMO ONLY - not cryptographically secure)
 class HomomorphicEncryption:
-    """Simplified homomorphic encryption utilities."""
-    
+    """
+    DEMO ONLY: Simplified homomorphic encryption for illustration purposes.
+    NOT cryptographically secure. Do NOT use for real data protection.
+    Use a proper HE library (e.g., TenSEAL, PySEAL) for production use.
+    """
+
     def __init__(self, key_size: int = 16):
+        logger.warning(
+            "HomomorphicEncryption is a DEMO stub and is NOT cryptographically secure. "
+            "Do not use for real data protection."
+        )
         # In practice, this would use a proper HE library like PySEAL
         self.key_size = key_size
         self.public_key, self.private_key = self._generate_keys()

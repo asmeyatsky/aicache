@@ -13,36 +13,9 @@ from pathlib import Path
 import msgpack
 
 from ..domain.toon import TOONCacheOperation, TOONAnalytics, TOONOperationType
+from ..domain.ports import TOONRepositoryPort
 
 logger = logging.getLogger(__name__)
-
-
-class TOONRepositoryPort:
-    """Port abstraction for TOON persistence."""
-
-    async def save_toon(self, toon: TOONCacheOperation) -> bool:
-        """Save TOON operation."""
-        raise NotImplementedError
-
-    async def get_toon(self, operation_id: str) -> Optional[TOONCacheOperation]:
-        """Retrieve TOON by operation ID."""
-        raise NotImplementedError
-
-    async def get_all_toons(self, limit: Optional[int] = None) -> List[TOONCacheOperation]:
-        """Retrieve all TOON operations."""
-        raise NotImplementedError
-
-    async def get_toons_by_type(self, operation_type: TOONOperationType) -> List[TOONCacheOperation]:
-        """Retrieve TOONs filtered by operation type."""
-        raise NotImplementedError
-
-    async def delete_toon(self, operation_id: str) -> bool:
-        """Delete TOON operation."""
-        raise NotImplementedError
-
-    async def clear_all_toons(self) -> int:
-        """Clear all TOON operations. Returns count deleted."""
-        raise NotImplementedError
 
 
 class InMemoryTOONRepositoryAdapter(TOONRepositoryPort):
@@ -86,7 +59,7 @@ class InMemoryTOONRepositoryAdapter(TOONRepositoryPort):
             return True
         return False
 
-    async def clear_all_toons(self) -> int:
+    async def clear_toons(self) -> int:
         """Clear all TOONs from memory."""
         count = len(self.toons)
         self.toons.clear()
@@ -185,7 +158,7 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
             logger.error(f"Error deleting TOON: {e}")
             return False
 
-    async def clear_all_toons(self) -> int:
+    async def clear_toons(self) -> int:
         """Clear all TOON files."""
         count = 0
         try:
@@ -199,11 +172,33 @@ class FileSystemTOONRepositoryAdapter(TOONRepositoryPort):
 
     @staticmethod
     def _dict_to_toon(data: Dict[str, Any]) -> Optional[TOONCacheOperation]:
-        """Convert dictionary to TOON object (simplified)."""
+        """Convert dictionary to TOON object."""
         try:
-            # Note: In production, use proper deserialization with validation
-            # This is a simplified version for demonstration
-            return None  # Would need full implementation
+            from ..domain.toon import TokenDelta, TOONOperationType
+            token_delta_data = data.get("token_delta", {})
+            token_delta = TokenDelta(
+                prompt_tokens=token_delta_data.get("prompt_tokens", 0),
+                completion_tokens=token_delta_data.get("completion_tokens", 0),
+                cached_tokens=token_delta_data.get("cached_tokens", 0),
+                saved_total=token_delta_data.get("saved_total", 0),
+                cost_without_cache=token_delta_data.get("cost_without_cache", 0.0),
+                cost_with_cache=token_delta_data.get("cost_with_cache", 0.0),
+                cost_saved=token_delta_data.get("cost_saved", 0.0),
+            )
+            return TOONCacheOperation(
+                operation_id=data.get("operation_id", ""),
+                timestamp=datetime.fromisoformat(data["timestamp"]) if isinstance(data.get("timestamp"), str) else datetime.now(),
+                operation_type=TOONOperationType(data.get("operation_type", "cache_miss")),
+                original_query=data.get("original_query", ""),
+                normalized_query=data.get("normalized_query", ""),
+                query_hash=data.get("query_hash", ""),
+                token_delta=token_delta,
+                model=data.get("model", ""),
+                cache_key=data.get("cache_key"),
+                similarity_score=data.get("similarity_score"),
+                duration_ms=data.get("duration_ms", 0.0),
+                context=data.get("context"),
+            )
         except Exception as e:
             logger.error(f"Error converting dict to TOON: {e}")
             return None

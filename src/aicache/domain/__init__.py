@@ -21,6 +21,7 @@ from .ports import (
     CacheMetricsPort,
     EmbeddingGeneratorPort,
     RepositoryPort,
+    TOONRepositoryPort,
 )
 from .services import (
     QueryNormalizationService,
@@ -62,6 +63,7 @@ __all__ = [
     "CacheMetricsPort",
     "EmbeddingGeneratorPort",
     "RepositoryPort",
+    "TOONRepositoryPort",
     # Services
     "QueryNormalizationService",
     "TokenCountingService",

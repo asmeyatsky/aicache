@@ -13,7 +13,6 @@ from dataclasses import dataclass, asdict
 from collections import defaultdict, Counter
 from pathlib import Path
 import hashlib
-import sqlite3
 import aiosqlite
 
 logger = logging.getLogger(__name__)
@@ -236,7 +235,7 @@ class BehavioralAnalyzer:
             try:
                 context = json.loads(query['context']) if query['context'] else {}
                 all_contexts.append(context)
-            except:
+            except (json.JSONDecodeError, TypeError, ValueError):
                 all_contexts.append({})
         
         if not all_contexts:

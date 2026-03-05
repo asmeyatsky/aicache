@@ -152,48 +152,71 @@ class CacheEvictionService:
     async def _evict_lru(self, space_needed: int) -> List[str]:
         """Evict least recently used entries."""
         keys = await self.storage.get_all_keys()
-        # In a real implementation, would fetch actual entries and sort by last_accessed
-        evicted = []
-        freed_space = 0
-
+        entries = []
         for key in keys:
             entry = await self.storage.get(key)
-            if entry and freed_space < space_needed:
-                await self.storage.delete(key)
-                freed_space += entry.get_size_bytes()
-                evicted.append(key)
+            if entry:
+                entries.append((key, entry))
+
+        # Sort by last_accessed (oldest first)
+        entries.sort(key=lambda x: (
+            x[1].metadata.last_accessed_at if x[1].metadata and x[1].metadata.last_accessed_at else x[1].created_at
+        ))
+
+        evicted = []
+        freed_space = 0
+        for key, entry in entries:
+            if freed_space >= space_needed:
+                break
+            await self.storage.delete(key)
+            freed_space += entry.get_size_bytes()
+            evicted.append(key)
 
         return evicted
 
     async def _evict_lfu(self, space_needed: int) -> List[str]:
         """Evict least frequently used entries."""
         keys = await self.storage.get_all_keys()
-        evicted = []
-        freed_space = 0
-
+        entries = []
         for key in keys:
             entry = await self.storage.get(key)
-            if entry and freed_space < space_needed:
-                # LFU: sort by access_count
-                await self.storage.delete(key)
-                freed_space += entry.get_size_bytes()
-                evicted.append(key)
+            if entry:
+                entries.append((key, entry))
+
+        # Sort by access_count (least accessed first)
+        entries.sort(key=lambda x: x[1].metadata.accessed_count if x[1].metadata else 0)
+
+        evicted = []
+        freed_space = 0
+        for key, entry in entries:
+            if freed_space >= space_needed:
+                break
+            await self.storage.delete(key)
+            freed_space += entry.get_size_bytes()
+            evicted.append(key)
 
         return evicted
 
     async def _evict_fifo(self, space_needed: int) -> List[str]:
         """Evict first-in-first-out entries."""
         keys = await self.storage.get_all_keys()
-        evicted = []
-        freed_space = 0
-
+        entries = []
         for key in keys:
             entry = await self.storage.get(key)
-            if entry and freed_space < space_needed:
-                # FIFO: sort by created_at
-                await self.storage.delete(key)
-                freed_space += entry.get_size_bytes()
-                evicted.append(key)
+            if entry:
+                entries.append((key, entry))
+
+        # Sort by created_at (oldest first)
+        entries.sort(key=lambda x: x[1].created_at)
+
+        evicted = []
+        freed_space = 0
+        for key, entry in entries:
+            if freed_space >= space_needed:
+                break
+            await self.storage.delete(key)
+            freed_space += entry.get_size_bytes()
+            evicted.append(key)
 
         return evicted
 

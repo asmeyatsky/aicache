@@ -322,7 +322,7 @@ class TOONCLIHandler:
             print("⚠️  This will delete all TOON data. Use --confirm to proceed.", file=sys.stderr)
             return
 
-        count = await self.repository.clear_all_toons()
+        count = await self.repository.clear_toons()
         print(f"✅ Cleared {count} TOON operations")
 
     async def handle_insights(self, days: int = 1) -> None:

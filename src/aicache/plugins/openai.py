@@ -1,6 +1,5 @@
 import shutil
 import re
-import sys
 from .base import CLIWrapper
 
 class OpenAICLIWrapper(CLIWrapper):

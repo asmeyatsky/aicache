@@ -174,6 +174,35 @@ class EmbeddingGeneratorPort(ABC):
         pass
 
 
+class TOONRepositoryPort(ABC):
+    """Port for TOON persistence."""
+
+    @abstractmethod
+    async def save_toon(self, toon) -> bool:
+        """Save TOON operation."""
+        pass
+
+    @abstractmethod
+    async def get_toon(self, operation_id: str):
+        """Retrieve TOON by operation ID."""
+        pass
+
+    @abstractmethod
+    async def get_all_toons(self, limit: int = 100) -> List:
+        """Retrieve all TOONs."""
+        pass
+
+    @abstractmethod
+    async def get_toons_by_type(self, operation_type: str, limit: int = 100) -> List:
+        """Retrieve TOONs by type."""
+        pass
+
+    @abstractmethod
+    async def clear_toons(self) -> int:
+        """Clear all TOONs."""
+        pass
+
+
 class RepositoryPort(ABC):
     """Repository port for cache entry persistence (convenience abstraction)."""
 

@@ -1,4 +1,3 @@
-import re
 import shutil
 from .base import CLIWrapper
 
@@ -13,10 +12,8 @@ class QwenCLIWrapper(CLIWrapper):
         # Assuming the prompt is the last argument, or follows a specific flag
         # For now, let's try to capture the last argument as the prompt
         # This regex might need refinement based on actual qwen CLI usage
-        args_str = " ".join(args)
-        match = re.search(r'(.*)', args_str) # Very broad, will capture everything
-        if match:
-            prompt_content = match.group(1)
+        # Use the full args string as the prompt
+        prompt_content = " ".join(args) if args else ""
 
         # Look for --model or -m flag
         if "--model" in args:

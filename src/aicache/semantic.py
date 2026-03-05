@@ -22,12 +22,11 @@ except (ImportError, Exception):
 
 SENTENCE_TRANSFORMERS_AVAILABLE = False
 try:
-    # Test import without actually importing
     import importlib.util
     spec = importlib.util.find_spec("sentence_transformers")
     if spec is not None:
         SENTENCE_TRANSFORMERS_AVAILABLE = True
-except:
+except (ImportError, ModuleNotFoundError, ValueError):
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 try:
@@ -44,14 +43,6 @@ except (ImportError, Exception):
 
 try:
     import nltk
-    import ssl
-    # Fix SSL certificate issue for NLTK downloads
-    try:
-        _create_unverified_https_context = ssl._create_unverified_context
-    except AttributeError:
-        pass
-    else:
-        ssl._create_default_https_context = _create_unverified_https_context
     from nltk.corpus import wordnet
     NLTK_AVAILABLE = True
 except (ImportError, Exception):
@@ -64,8 +55,8 @@ logger = logging.getLogger(__name__)
 if NLTK_AVAILABLE:
     try:
         wordnet.synsets('computer')
-    except:
-        nltk.download('wordnet')
+    except LookupError:
+        nltk.download('wordnet', quiet=True)
 
 def get_synonyms(word):
     """
@@ -176,7 +167,7 @@ class ChromaDBStore(VectorStore):
         
         try:
             self.collection = self.client.get_collection(name=collection_name)
-        except:
+        except (ValueError, Exception):
             self.collection = self.client.create_collection(
                 name=collection_name,
                 metadata={"hnsw:space": "cosine"}

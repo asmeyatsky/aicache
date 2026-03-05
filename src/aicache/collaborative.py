@@ -83,7 +83,7 @@ class EncryptionManager:
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),
                 length=32,
-                salt=b'aicache_salt',  # In production, use random salt
+                salt=os.urandom(16),
                 iterations=100000,
             )
             key = base64.urlsafe_b64encode(kdf.derive(key))
@@ -97,8 +97,8 @@ class EncryptionManager:
             return base64.urlsafe_b64encode(encrypted).decode()
         except Exception as e:
             logger.error(f"Encryption failed: {e}")
-            return data  # Fallback to unencrypted
-    
+            raise ValueError("Encryption failed") from e
+
     def decrypt(self, encrypted_data: str) -> str:
         """Decrypt sensitive data."""
         try:
@@ -107,7 +107,7 @@ class EncryptionManager:
             return decrypted.decode()
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
-            return encrypted_data  # Return as-is if decryption fails
+            raise ValueError("Decryption failed") from e
 
 class TeamCache:
     """Team-wide cache with sharing and collaboration features."""
@@ -331,7 +331,7 @@ class TeamCache:
     def _queue_sync(self, operation: str, cache_key: str):
         """Queue a sync operation."""
         sync = CacheSync(
-            sync_id=hashlib.md5(f"{operation}:{cache_key}:{time.time()}".encode()).hexdigest(),
+            sync_id=hashlib.sha256(f"{operation}:{cache_key}:{time.time()}".encode()).hexdigest(),
             source_user=self.user_id,
             target_users=list(self.team_members.keys()),
             operation=operation,
